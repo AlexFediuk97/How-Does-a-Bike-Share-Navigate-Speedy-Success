@@ -1,0 +1,3914 @@
+---
+title: "Case Study: How Does a Bike-Share Navigate Speedy Success?"
+author: "Sasha Fediuk"
+date: "2022-09-11"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+![](Cyslistic.png)
+
+In 2016, Cyclistic launched a bike-share service in Chicago, which has since expanded to a fleet of 5,824 geotracked bicycles locked to a network of 680 docking stations, where they can be taken and returned at any time. Until now, the company's strategy has been to build general awareness about the company and appeal to broad consumer segments through the flexibility of its price plans (i.e., single-ride passes, full-day passes, and annual memberships). Here, customers who purchase annual memberships are referred to as members, and customers who buy single-ride or full-day passes are considered casual riders or just casual for simplicity.
+
+Cyclistic's financial analysts strongly believe annual members are much more profitable than casual riders. Lily Moreno, the director of marketing and finances, indicates that Cyclistic already has strong awareness, and, thus, the company should increase the number of annual members by creating a marketing campaign that would convert casual riders into members rather than attracting new customers. **In order to do it, Cyclistic should better understand how annual members and casual riders differ, which is the main business task in this report**. The Cyclistic marketing analytics team has put into action to analyze the recent Cyclistic historical bike trip data to understand how the two types of bike riders differ.
+
+## Data
+
+The data on bike trip data were retrieved from [the company's database website](https://divvy-tripdata.s3.amazonaws.com/index.html) between June 2021 - May 2022. The information was organized by year and month (e.g., 2021_06 stands for bike trip data retrieved from June 2021). In order to protect the privacy of customers, all variables relating to their gender and age were eliminated. Also, all the variables were renamed in Excel, so they have the same variable names. As a result, the dataset include the following 13 variables:
+
+-   **ride_id** - ID attached to each bike ride taken,
+
+-   **rideable_type** - bike type: classic, electric, or docked,
+
+-   **started_at** - day and time bike ride started, in CST,
+
+-   **ended_at** - day and time bike ride ended, in CST,
+
+-   **start_station_name** - name of station where bike ride started,
+
+-   **start_station_id** - ID of station where bike ride started,
+
+-   **end_station_name** - name of station where bike ride ended,
+
+-   **end_station_id** - ID of station where bike ride ended,
+
+-   **start_lat** - latitude of station where bike ride started,
+
+-   **start_lng** - longitude of station where bike ride started,
+
+-   **end_lat** - latitude of station where bike ride ended,
+
+-   **end_lng** - longitude of station where bike ride ended, and
+
+-   **member_casual** - customer type: member or casual.
+
+## Data Processing
+
+Data processing includes the following steps:
+
+1.  Gathering all monthly data and aggregating it into yearly data.
+
+2.  Ensuring the day and time the bike ride began is always earlier than when the bike ride ended.
+
+3.  Bike rides with a duration of less than 60 seconds (1 minute) are excluded from further analysis.
+
+4.  Bike rides with a duration of more than or equal to 24 hours (1 day) are also excluded from further analysis.
+
+```{r echo = FALSE, include = FALSE, message = FALSE}
+library(readr) ## package for reading data
+library(dplyr) ## package for data manipulation
+library(lubridate) ## package for date and time manipulation
+library(ggplot2) ## package for data visualization
+library(ggthemes) ## package provides extra themes
+library(gganimate) ## package for creating animated visualizations
+library(png) ## package for working with png-files
+library(gifski) ## package for working with gifs
+library(scales) ## package provides scale functions for data visualization
+library("RColorBrewer") ## package provides pre-made palettes
+library(forcats) ## provides tools for working with categorical variables
+                  ## (factors)
+## packages for working with administrative borders and streets
+library(osmdata)
+library(ggmap)
+library(sf)
+```
+
+### 1. Gathering all monthly data and aggregating it into yearly data.
+
+```{r echo = FALSE, message = FALSE}
+# Importing and Cleaning the Data
+
+## Getting the data & converting them into their right 
+## datatypes where it is possible.
+## Unfortunately, datetime types, such as started_at and 
+## ended_at cannot be converted and, thus, are converted 
+## into character type instead.
+
+bike_data_2021_06 <- read_csv("Bike_data/2021_06.csv",
+                              col_types = "cfccccccddddf")
+## col_types = "cfccccccddddf" where c stands for "character",
+## f stands for "factor", and d stands for "numeric"
+
+bike_data_2021_07 <- read_csv("Bike_data/2021_07.csv",
+                              col_types = "cfccccccddddf")
+bike_data_2021_08 <- read_csv("Bike_data/2021_08.csv",
+                              col_types = "cfccccccddddf")
+bike_data_2021_09 <- read_csv("Bike_data/2021_09.csv",
+                              col_types = "cfccccccddddf")
+bike_data_2021_10 <- read_csv("Bike_data/2021_10.csv",
+                              col_types = "cfccccccddddf")
+bike_data_2021_11 <- read_csv("Bike_data/2021_11.csv",
+                              col_types = "cfccccccddddf")
+bike_data_2021_12 <- read_csv("Bike_data/2021_12.csv",
+                              col_types = "cfccccccddddf")
+bike_data_2022_01 <- read_csv("Bike_data/2022_01.csv",
+                              col_types = "cfccccccddddf")
+bike_data_2022_02 <- read_csv("Bike_data/2022_02.csv",
+                              col_types = "cfccccccddddf")
+bike_data_2022_03 <- read_csv("Bike_data/2022_03.csv",
+                              col_types = "cfccccccddddf")
+bike_data_2022_04 <- read_csv("Bike_data/2022_04.csv",
+                              col_types = "cfccccccddddf")
+bike_data_2022_05 <- read_csv("Bike_data/2022_05.csv",
+                              col_types = "cfccccccddddf")
+
+## Gathering all data together by binding rows
+
+bike_data_2021_2022 <- bind_rows(bike_data_2021_06, 
+                                 bike_data_2021_07,
+                                 bike_data_2021_08,
+                                 bike_data_2021_09,
+                                 bike_data_2021_10,
+                                 bike_data_2021_11,
+                                 bike_data_2021_12,
+                                 bike_data_2022_01,
+                                 bike_data_2022_02,
+                                 bike_data_2022_03,
+                                 bike_data_2022_04,
+                                 bike_data_2022_05)
+
+## Converting started_at and ended_at from character 
+## to datetime type
+
+bike_data_2021_2022$started_at <- 
+  mdy_hm(bike_data_2021_2022$started_at)
+bike_data_2021_2022$ended_at <- 
+  mdy_hm(bike_data_2021_2022$ended_at)
+
+## Removing data frames that are no longer needed
+rm(bike_data_2021_06)
+rm(bike_data_2021_07)
+rm(bike_data_2021_08)
+rm(bike_data_2021_09)
+rm(bike_data_2021_10)
+rm(bike_data_2021_11)
+rm(bike_data_2021_12)
+rm(bike_data_2022_01)
+rm(bike_data_2022_02)
+rm(bike_data_2022_03)
+rm(bike_data_2022_04)
+rm(bike_data_2022_05)
+
+## Converting it to the dataframe as it is currently a tibble
+bike_data <- as.data.frame(bike_data_2021_2022)
+
+## Deleting the data
+rm(bike_data_2021_2022)
+```
+
+Monthly data between June 2021 and May 2022 was collected and aggregated together. As a result, the total number of data records is
+
+```{r echo = FALSE, message = FALSE}
+nrow(bike_data)
+```
+
+### 2. Ensuring the day and time the bike ride began is always earlier than when the bike ride ended.
+
+Currently, the number of data records where the date and time of a bike ride began is later than the date and time the bike ride ended and is equal to
+
+```{r echo = FALSE}
+## Checking if there are the date and time of a bike ride began later than
+## the date and time the bike ride ended
+as.integer(bike_data %>% 
+  filter(started_at > ended_at) %>% 
+  summarize(count = n()))
+```
+
+After swapping places between end and start dates and times in those bike rides, the number of data records where the date and time of a bike ride began is later than the date and time the bike ride ended and is equal to
+
+```{r echo = FALSE, message = FALSE}
+## Fixing the dates, i.e., so the start date is always
+## less than the end date by swapping places start dates
+## with end dates where the start dates are after the 
+## end dates
+a_vector <- as.vector(bike_data$started_at)
+b_vector <- as.vector(bike_data$ended_at)
+
+for (i in 1:length(a_vector))
+{
+  if(a_vector[i] > b_vector[i])
+  {
+    temp <- a_vector[i]
+    a_vector[i] <- b_vector[i]
+    b_vector[i] <- temp
+  }
+}
+
+bike_data$started_at <- as_datetime(a_vector)
+bike_data$ended_at <- as_datetime(b_vector)
+
+## Removing variables that are no longer needed
+rm(a_vector)
+rm(b_vector)
+rm(i)
+rm(temp)
+
+## Checking if there are still the date and time of a bike ride began later
+## than the date and time the bike ride ended
+as.integer(bike_data %>% 
+  filter(started_at > ended_at) %>% 
+  summarize(count = n()))
+```
+
+### 3. Bike rides with a duration of less than 60 seconds (1 minute) are excluded from further analysis.
+
+Currently, the number of data records that have a duration of less than 60 seconds (1 minute) is equal to
+
+```{r echo = FALSE, message = FALSE}
+# Calculating new variables
+
+## Variables related to dates
+bike_data <- bike_data %>% 
+  mutate(month = month(started_at, label = TRUE, abbr = FALSE),
+         day_of_week = wday(started_at, label = TRUE, abbr = FALSE),
+         hour = hour(started_at),
+         minute = minute(started_at),
+         hour_and_minute = as.numeric(as.character(hour)) +
+           as.numeric(round(as.numeric(as.character(minute))/60, 1)))
+
+## Removing "bike" from the rideable type name
+
+bike_data$rideable_type <- recode(
+  bike_data$rideable_type,
+  classic_bike = 'Classic',
+  electric_bike = 'Electric',
+  docked_bike = 'Docked')
+
+## Variables related to bike ride duration
+bike_data <- bike_data %>% 
+  mutate(duration_in_seconds = as.numeric(ended_at - started_at),
+         duration_in_minutes = round(duration_in_seconds/60, 1),
+         duration_in_hours = round(duration_in_minutes/60, 1))
+
+## Checking how many bike rides are less than 1 minute in duration 
+as.integer(bike_data %>% 
+  filter(duration_in_seconds < 60) %>% 
+  summarize(count = n()))
+```
+
+After filtering the data records, so their duration is only higher than or equal to 60 seconds (1 minute), the number of bike rides with a duration of less than 60 seconds (1 minute) is equal to
+
+```{r echo = FALSE, message = FALSE}
+
+## Excluding bike rides less than 1 minute in duration 
+bike_data <- bike_data %>% 
+  filter(duration_in_seconds >= 60)
+
+## Checking how many bike rides are less than 1 minute in duration 
+as.integer(bike_data %>% 
+  filter(duration_in_seconds < 60) %>% 
+  summarize(count = n()))
+```
+
+### 4. Bike rides with a duration of more than or equal to 24 hours (1 day) are also excluded from further analysis.
+
+Currently, the number of bike rides with a duration of more than or equal to 24 hours (1 day) is equal to
+
+```{r echo = FALSE, message = FALSE}
+## Checking how many bike rides are more than or equal to 1 day in duration 
+as.integer(bike_data %>% 
+  filter(duration_in_hours >= 24) %>% 
+  summarize(count = n()))
+```
+
+After filtering the data records, so their duration is only less than 24 hours (1 day), the number of bike rides with a duration of equal to or more than 24 hours (1 day) is equal to
+
+```{r echo = FALSE, message = FALSE}
+
+## Excluding bike rides greater than or equal to 24 hours in duration
+bike_data <- bike_data %>% 
+  filter(duration_in_hours < 24)
+
+## Checking how many bike rides are more than or equal to 1 day in duration 
+as.integer(bike_data %>% 
+  filter(duration_in_hours >= 24) %>% 
+  summarize(count = n()))
+```
+
+## Data Analysis & Visualization
+
+### 1. The total number, total duration, and mean duration of bike rides by customer type
+
+#### 1. The total number of bike rides by customer type
+
+Annual members drive significantly more frequently than casual riders per year. For example, from Figure 1, annual members make 3.3 million rides per year, whereas casual riders do 2.5 million rides per year.
+
+```{r echo = FALSE, message = FALSE}
+
+## Aggregating the data to reduce their size for better further analyzing
+
+## Grouping the data by location, month, weekday, hour, customer type, and rideable type
+aggregated_bike_rides <- bike_data %>% 
+  group_by(start_lng, start_lat, end_lng, end_lat, month, day_of_week, hour_and_minute, member_casual, rideable_type) %>% 
+  summarize(count = n(), 
+            sum_in_minutes = sum(duration_in_minutes, na.rm = TRUE)) %>% 
+  ungroup()
+
+## Deleting the data that is no longer needed
+rm(bike_data)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Grouping the data by customer type count
+
+bike_rides_by_customer_type_count <- aggregated_bike_rides %>% 
+  group_by(member_casual) %>% 
+  summarize(count = sum(count)) %>% 
+  ungroup()
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by customer type count
+
+bike_rides_by_customer_type_count %>%
+  ggplot(aes(x = member_casual, y = count, fill = member_casual), ) +
+  geom_bar(stat = "identity", color = "black", show.legend = FALSE) +
+  theme_wsj() +
+  scale_fill_wsj() +
+  geom_text(aes(label = format(count, big.mark = ",", scientific = FALSE)), vjust = -0.3, size = 4) +
+  labs(title = "Figure 1: Total Number of Bike Rides by Customer Type",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       x = "Customer type", 
+       y = "Number of bike rides made") +
+  theme(plot.title = element_text(size = 12, face = "bold")) +
+  theme(plot.subtitle = element_text(size = 9)) +
+  theme(plot.caption = element_text(size = 9)) +
+  theme(axis.title.x = element_text(size = 10, face = "italic")) +
+  theme(axis.title.y = element_text(size = 10, face = "italic")) +
+  theme(axis.text.x = element_text(size = 8)) +
+  theme(axis.text.y = element_text(size = 8)) +
+  scale_y_continuous(labels = comma, limits = c(0, 4000000)) +
+  scale_fill_brewer(palette = "Dark")
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that is no longer needed
+
+rm(bike_rides_by_customer_type_count)
+```
+
+Both annual members and casual riders start most of their bike rides (more than 200 and 150 thousand bike rides for annual members and casual riders, respectively) in the northeastern part of the city (see Figure 2).
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Grouping the data by start location and customer type count
+bike_rides_by_start_location_and_customer_type_count <-
+  aggregated_bike_rides %>% 
+  group_by(start_lng, start_lat, member_casual) %>% 
+  summarize(count = sum(count)) %>% 
+  ungroup()
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+## Getting the Chicago road map coordinates
+chicago_road_map <- get_map(getbb("Chicago, Illinois"), 
+                            maptype = "roadmap", zoom = 10)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+## Visualizing of grouping the data by start location and customer type count
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_start_location_and_customer_type_count,
+    aes(x = start_lng, y = start_lat, z = count/1000),
+    fun = sum, alpha = 0.6, bins = 30) + 
+  scale_fill_gradient(name = "Number of bike rides made (in thousands)", 
+                      low = "green", high = "red") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 2: Total Number of Bike Rides by Start Locations and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(~ member_casual)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+## Deleting the data that is no longer needed
+rm(bike_rides_by_start_location_and_customer_type_count)
+```
+
+Both annual members and casual riders end most of their bike rides (more than 200 and 150 thousand bike rides for annual members and casual riders, respectively) in the northeastern part of the city (see Figure 3). Note that both annual members and casual riders end their bike rides much further than when they start (see Figure 2), with casual riders ending their bike rides further than annual members. For example, casual riders end their bike rides in Riverside and Crestwood compared to annual members who do not.
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+## Grouping the data by end location and customer type count
+bike_rides_by_end_location_and_customer_type_count <-
+  aggregated_bike_rides %>% 
+  group_by(end_lng, end_lat, member_casual) %>% 
+  summarize(count = sum(count)) %>% 
+  ungroup()
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+## Visualizing of grouping the data by end location and customer type count
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_end_location_and_customer_type_count,
+    aes(x = end_lng, y = end_lat, z = count/1000),
+    fun = sum, alpha = 0.6, bins = 30) + 
+  scale_fill_gradient(name = "Number of bike rides made (in thousands)", 
+                      low = "green", high = "red") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 3: Total Number of Bike Rides by End Locations and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(~ member_casual)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+## Deleting the data that is no longer needed
+rm(bike_rides_by_end_location_and_customer_type_count)
+```
+
+#### 2. The total duration of bike rides by customer type
+
+Overall, casual riders spend significantly more time driving than annual members (1 million total hours versus 704 thousand total hours) (see Figure 4).
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+# Grouping the data by customer type sum
+
+bike_rides_by_customer_type_sum <- aggregated_bike_rides %>% 
+  group_by(member_casual) %>% 
+  summarize(sum = round(sum(sum_in_minutes)/60, 1)) %>% 
+  ungroup()
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+## Visualizing of grouping the data by customer type sum
+
+bike_rides_by_customer_type_sum %>%
+  ggplot(aes(x = member_casual, y = sum, fill = member_casual), ) +
+  geom_bar(stat = "identity", color = "black", show.legend = FALSE) +
+  theme_wsj() +
+  scale_fill_wsj() +
+  geom_text(aes(label = format(sum, big.mark = ",", scientific = FALSE)), vjust = -0.3, size = 4) +
+  labs(title = "Figure 4: Total Duration of Bike Rides by Customer Type",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       x = "Customer type", 
+       y = "Duration of bike rides made (in hours)") +
+  theme(plot.title = element_text(size = 12, face = "bold")) +
+  theme(plot.subtitle = element_text(size = 9)) +
+  theme(plot.caption = element_text(size = 9)) +
+  theme(axis.title.x = element_text(size = 10, face = "italic")) +
+  theme(axis.title.y = element_text(size = 10, face = "italic")) +
+  theme(axis.text.x = element_text(size = 8)) +
+  theme(axis.text.y = element_text(size = 8)) +
+  scale_y_continuous(labels = comma, limits = c(0, 1200000)) +
+  scale_fill_brewer(palette = "Dark")
+```
+
+```{r echo = FALSE, message = FALSE}
+## Deleting the data that is no longer needed
+rm(bike_rides_by_customer_type_sum)
+```
+
+Both annual members and casual riders have the most lengthy bike ride duration areas (more than 50 and 100 thousand total hours for annual members and casual riders, respectively) in the northeastern part of the city as using the bike ride starting locations (see Figure 5).
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Grouping the data by start location and customer type sum
+bike_rides_by_start_location_and_customer_type_sum <-
+  aggregated_bike_rides %>% 
+  group_by(start_lng, start_lat, member_casual) %>% 
+  summarize(sum = round(sum(sum_in_minutes)/60, 1)) %>% 
+  ungroup()
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+## Visualizing of grouping the data by start location and customer type sum
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_start_location_and_customer_type_sum,
+    aes(x = start_lng, y = start_lat, z = sum/1000),
+    fun = sum, alpha = 0.6, bins = 30) + 
+  scale_fill_gradient(name = "Duration of bike rides made (in hours)", 
+                      low = "green", high = "red") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 5: Total Duration of Bike Rides by Start Locations and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(~ member_casual)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+# Deleting the data that are no longer necessary
+rm(bike_rides_by_start_location_and_customer_type_sum)
+```
+
+Both annual members and casual riders have the most lengthy bike ride duration areas (more than 50 and 75 thousand total hours for annual members and casual riders, respectively) in the northeastern part of the city as using the bike ride ending locations (see Figure 6).
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Grouping the data by end location and customer type sum
+bike_rides_by_end_location_and_customer_type_sum <-
+  aggregated_bike_rides %>% 
+  group_by(end_lng, end_lat, member_casual) %>% 
+  summarize(sum = round(sum(sum_in_minutes)/60, 1)) %>% 
+  ungroup()
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+## Visualizing of grouping the data by end location and customer type sum
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_end_location_and_customer_type_sum,
+    aes(x = end_lng, y = end_lat, z = sum/1000),
+    fun = sum, alpha = 0.6, bins = 30) + 
+  scale_fill_gradient(name = "Duration of bike rides made (in hours)", 
+                      low = "green", high = "red") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 6: Total Duration of Bike Rides by End Locations and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(~ member_casual)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+# Deleting the data that are no longer necessary
+rm(bike_rides_by_end_location_and_customer_type_sum)
+```
+
+#### 3. The mean duration of bike rides by customer type
+
+Casual riders drive significantly more per bike ride than annual members (25.7 minutes vs 12.9 minutes, respectively) (see Figure 7).
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Grouping the data by customer type mean
+
+bike_rides_by_customer_type_mean <- aggregated_bike_rides %>% 
+  group_by(member_casual) %>% 
+  summarize(count = sum(count),
+            sum = sum(sum_in_minutes)) %>% 
+  ungroup() %>% 
+  mutate(mean = round(sum/count, 1)) %>% 
+  select(member_casual, mean)
+```
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+## Visualizing of grouping the data by customer type mean
+
+bike_rides_by_customer_type_mean %>%
+  ggplot(aes(x = member_casual, y = mean, fill = member_casual), ) +
+  geom_bar(stat = "identity", color = "black", show.legend = FALSE) +
+  theme_wsj() +
+  scale_fill_wsj() +
+  geom_text(aes(label = format(mean, big.mark = ",", scientific = FALSE)), vjust = -0.3, size = 4) +
+  labs(title = "Figure 7: Mean Duration of Bike Rides by Customer Type",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       x = "Customer type", 
+       y = "Duration of bike rides made (in minutes)") +
+  theme(plot.title = element_text(size = 12, face = "bold")) +
+  theme(plot.subtitle = element_text(size = 9)) +
+  theme(plot.caption = element_text(size = 9)) +
+  theme(axis.title.x = element_text(size = 10, face = "italic")) +
+  theme(axis.title.y = element_text(size = 10, face = "italic")) +
+  theme(axis.text.x = element_text(size = 8)) +
+  theme(axis.text.y = element_text(size = 8)) +
+  scale_y_continuous(labels = comma, limits = c(0, 30)) +
+  scale_fill_brewer(palette = "Dark")
+```
+
+```{r echo = FALSE, warning = FALSE}
+
+## Deleting the data that is no longer needed
+rm(bike_rides_by_customer_type_mean)
+```
+
+Both annual members and casual riders drive significantly more per bike ride (more than 40 minutes per bike trip) in the southern part of the city, with casual riders driving significantly more per bike ride (more than 40 minutes per bike trip) along the coastline, according to the starting bike ride locations (see Figure 8).
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Grouping the data by start location and customer type mean
+bike_rides_by_start_location_and_customer_type_mean <-
+  aggregated_bike_rides %>% 
+  group_by(start_lng, start_lat, member_casual) %>% 
+  summarize(count = sum(count),
+            sum = sum(sum_in_minutes)) %>% 
+  ungroup() %>% 
+  mutate(mean = round(sum/count, 1)) %>% 
+  select(start_lng, start_lat, member_casual, mean)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by start location and customer type mean
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_start_location_and_customer_type_mean,
+    aes(x = start_lng, y = start_lat, z = mean),
+    fun = mean, alpha = 0.6, bins = 30) + 
+  scale_fill_gradient(name = "Duration of bike rides made (in minutes)", 
+                      low = "green", high = "red") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 8: Mean Duration of Bike Rides by Start Locations and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(~ member_casual)
+```
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+## Deleting the data that is no longer needed
+rm(bike_rides_by_start_location_and_customer_type_mean)
+```
+
+From Figure 9, the western part of the city has the highest mean duration (more than 200 minutes) for casual riders compared to annual members, who have the same average duration throughout the city (less than 100 minutes) according to the ending bike ride locations.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Grouping the data by end location and customer type mean
+bike_rides_by_end_location_and_customer_type_mean <-
+  aggregated_bike_rides %>% 
+  group_by(end_lng, end_lat, member_casual) %>% 
+  summarize(count = sum(count),
+            sum = sum(sum_in_minutes)) %>% 
+  ungroup() %>% 
+  mutate(mean = round(sum/count, 1)) %>% 
+  select(end_lng, end_lat, member_casual, mean)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by end location and customer type mean
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_end_location_and_customer_type_mean,
+    aes(x = end_lng, y = end_lat, z = mean),
+    fun = mean, alpha = 0.6, bins = 30) + 
+  scale_fill_gradient(name = "Duration of bike rides made (in minutes)", 
+                      low = "green", high = "red") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 9: Mean Duration of Bike Rides by End Locations and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(~ member_casual)
+```
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+## Deleting the data that is no longer needed
+rm(bike_rides_by_end_location_and_customer_type_mean)
+```
+
+### 2. The total number, total duration, and mean duration of bike rides by month and customer type
+
+#### 1. The total number of bike rides by month and customer type
+
+Bike rides made by annual members are higher than casual riders in all months except summer, when casual riders make the most bike rides (see Figure 10). In contrast, annual members make the most bike rides in September, October, and August, followed by July, May, and June. However, both customer types have very similar patterns, such as their bike rides being the lowest in winter, followed by spring.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Grouping the data by month and customer type count
+bike_rides_by_month_and_customer_type_count <- aggregated_bike_rides %>% 
+  group_by(month, member_casual) %>% 
+  summarize(count = sum(count)) %>%
+  ungroup()
+```
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+## Visualizing of grouping the data by month and customer type count
+
+bike_rides_by_month_and_customer_type_count %>% 
+  ggplot(aes(x = month, y = count)) +
+  geom_area(aes(group = member_casual, fill = member_casual), 
+            alpha = 0.5, position = position_dodge(0)) +
+  theme_wsj() +
+  scale_fill_wsj() +
+  labs(title = "Figure 10: Total Number of Bike Rides by Month and Customer Type",
+       caption = "Data source: Cyclistic, June 2021 - May 2022", 
+       x = "Month", 
+       y = "Number of bike rides made") +
+  guides(fill = guide_legend(title = "Customer type")) +
+  theme(plot.title = element_text(size = 10, face = "bold")) +
+  theme(plot.caption = element_text(size = 9)) +
+  theme(axis.title.x = element_text(size = 10, face = "italic")) +
+  theme(axis.title.y = element_text(size = 10, face = "italic")) +
+  theme(legend.title = element_text(size = 9)) +
+  theme(legend.text = element_text(size = 8)) +
+  theme(axis.text.x = element_text(size = 8, angle = 90, 
+                                   vjust = 0.5, hjust = 1)) +
+  theme(axis.text.y = element_text(size = 8)) + 
+  geom_vline(xintercept = seq(from = 1, to = 12, by = 1), 
+             linetype = "longdash", color = "white", size = 0.5) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma, limits = c(0, 500000))
+```
+
+```{r echo = FALSE, warning = FALSE}
+
+## Deleting the data that is no longer needed
+
+rm(bike_rides_by_month_and_customer_type_count)
+```
+
+The highest number of bike rides is being started in the northeastern part of the city, which is true for each month (see Figure 11).
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Grouping the data by start location, month and customer type count
+bike_rides_by_start_location_month_and_customer_type_count <-
+  aggregated_bike_rides %>% 
+  group_by(start_lng, start_lat, month, member_casual) %>% 
+  summarize(count = sum(count)) %>% 
+  ungroup()
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width = 10, fig.asp = 0.4}
+
+## Visualizing of grouping the data by start location, month and customer 
+## type count
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_start_location_month_and_customer_type_count,
+    aes(x = start_lng, y = start_lat, z = count/1000),
+    fun = sum, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Number of bike rides made (in thousands)", 
+                      low = "green", high = "red") +
+  labs(title = "Figure 11: Total Number of Bike Rides by Start Locations, Month, and Customer Type",
+  x = "Longtitude",
+  y = "Latitude",
+  caption = "Data source: Cyclistic, June 2021 - May 2022") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        title = element_text(size = 9),
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ month)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Removing the data that are no longer necessary
+
+rm(bike_rides_by_start_location_month_and_customer_type_count)
+```
+
+Again, the highest number of bike rides is being ended in the northeastern part of the city, which is true for each month (see Figure 12).
+
+```{r echo = FALSE, message = FALSE}
+
+## Grouping the data by end location, month and customer type count
+bike_rides_by_end_location_month_and_customer_type_count <-
+  aggregated_bike_rides %>% 
+  group_by(end_lng, end_lat, month, member_casual) %>% 
+  summarize(count = sum(count)) %>% 
+  ungroup()
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width = 10, fig.asp = 0.4}
+
+## Visualizing of grouping the data by end location, month and customer 
+## type count
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_end_location_month_and_customer_type_count,
+    aes(x = end_lng, y = end_lat, z = count/1000),
+    fun = sum, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Number of bike rides made (in thousands)", 
+                      low = "green", high = "red") +
+  labs(title = "Figure 12: Total Number of Bike Rides by End Locations, Month, and Customer Type",
+  x = "Longtitude",
+  y = "Latitude",
+  caption = "Data source: Cyclistic, June 2021 - May 2022") +
+  theme(axis.text.x = element_text(angle = 90),
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ month)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Removing the data that are no longer necessary
+
+rm(bike_rides_by_end_location_month_and_customer_type_count)
+```
+
+#### 2. The total duration of bike rides by month and customer type
+
+From Figure 13, for casual riders, the total duration of bike rides is the highest in July, followed by August, June, and September. For annual members, the total bike ride duration is the highest and about the same between May and October. Conversely, the least total duration of bike rides is in January and February, followed by March, December, and September for both annual members and casual riders. Note that casual riders have a higher total bike ride duration than annual members in all months except for January, February, December, November, March, and April. However, in the last two months, March and April, the total duration made by both customer types is roughly the same.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+# Grouping the data by month and customer type sum
+
+bike_rides_by_month_and_customer_type_sum <- aggregated_bike_rides %>% 
+  group_by(month, member_casual) %>% 
+  summarize(sum = round(sum(sum_in_minutes)/60, 1)) %>% 
+  ungroup()
+```
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+
+## Visualizing of grouping the data by month and customer type sum
+
+bike_rides_by_month_and_customer_type_sum %>% 
+  ggplot(aes(x = month, y = sum)) +
+  geom_area(aes(group = member_casual, fill = member_casual), 
+            alpha = 0.5, position = position_dodge(0)) +
+  theme_wsj() +
+  scale_fill_wsj() +
+  labs(title = "Figure 13: Total Duration of Bike Rides by Month and Customer Type",
+       caption = "Data source: Cyclistic, June 2021 - May 2022", 
+       x = "Month", 
+       y = "Duration of bike rides made (in hours)") +
+  guides(fill = guide_legend(title = "Customer type")) +
+  theme(plot.title = element_text(size = 10, face = "bold")) +
+  theme(plot.caption = element_text(size = 9)) +
+  theme(axis.title.x = element_text(size = 10, face = "italic")) +
+  theme(axis.title.y = element_text(size = 10, face = "italic")) +
+  theme(legend.title = element_text(size = 9)) +
+  theme(legend.text = element_text(size = 8)) +
+  theme(axis.text.x = element_text(size = 8, angle = 90, 
+                                   vjust = 0.5, hjust = 1)) +
+  theme(axis.text.y = element_text(size = 8)) + 
+  geom_vline(xintercept = seq(from = 1, to = 12, by = 1), 
+             linetype = "longdash", color = "white", size = 0.5) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Removing the data that are no longer necessary
+
+rm(bike_rides_by_month_and_customer_type_sum)
+```
+
+Again, the highest total duration of bike rides is in the northeastern part of the city, according to the bike ride start locations (see Figure 14), which is true for all months.
+
+```{r echo = FALSE, message = FALSE}
+
+## Grouping the data by start location, month and customer type sum
+bike_rides_by_start_location_month_and_customer_type_sum <-
+  aggregated_bike_rides %>% 
+  group_by(start_lng, start_lat, month, member_casual) %>% 
+  summarize(sum = round(sum(sum_in_minutes)/60, 1)) %>% 
+  ungroup()
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width = 10, fig.asp = 0.4}
+
+## Visualizing of grouping the data by start location, month and customer 
+## type sum
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_start_location_month_and_customer_type_sum,
+    aes(x = start_lng, y = start_lat, z = sum/1000),
+    fun = sum, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Total duration of bike rides made (in thousand hours)", 
+                      low = "green", high = "red") +
+  labs(title = "Figure 14: Total Duration of Bike Rides by Start Locations, Month, and Customer Type",
+  x = "Longtitude",
+  y = "Latitude",
+  caption = "Data source: Cyclistic, June 2021 - May 2022") +
+  theme(axis.text.x = element_text(angle = 90),
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ month)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_start_location_month_and_customer_type_sum)
+```
+
+Again, the highest total duration of bike rides is in the northeastern part of the city, according to the bike ride end locations (see Figure 15), which is true for all months.
+
+```{r echo = FALSE, message = FALSE}
+
+## Grouping the data by end location, month and customer type sum
+bike_rides_by_end_location_month_and_customer_type_sum <-
+  aggregated_bike_rides %>% 
+  group_by(end_lng, end_lat, month, member_casual) %>% 
+  summarize(sum = round(sum(sum_in_minutes)/60, 1)) %>% 
+  ungroup()
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width = 10, fig.asp = 0.4}
+
+## Visualizing of grouping the data by end location, month and customer 
+## type sum
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_end_location_month_and_customer_type_sum,
+    aes(x = end_lng, y = end_lat, z = sum/1000),
+    fun = sum, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Total duration of bike rides made (in thousand hours)", 
+                      low = "green", high = "red") +
+  labs(title = "Figure 15: Total Duration of Bike Rides by End Locations, Month, and Customer Type",
+  x = "Longtitude",
+  y = "Latitude",
+  caption = "Data source: Cyclistic, June 2021 - May 2022") +
+  theme(axis.text.x = element_text(angle = 90),
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ month)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_end_location_month_and_customer_type_sum)
+```
+
+#### 3. The mean duration of bike rides by month and customer type
+
+From Figure 16, casual riders drive for longer than annual members per bike ride each month. Annual members' duration per bike ride is between 10 and 15 minutes each month, with a peak in June and the highest decline in December and February. On the contrary, casual riders drive significantly less per bike ride in January, December, November, and February and most in June, July, and August.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Grouping the data by month and customer type mean
+
+bike_rides_by_month_and_customer_type_mean <- aggregated_bike_rides %>% 
+  group_by(month, member_casual) %>% 
+  summarize(count = sum(count),
+            sum = sum(sum_in_minutes)) %>% 
+  ungroup() %>% 
+  mutate(mean = round(sum/count, 1)) %>% 
+  select(month, member_casual, mean)
+```
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+## Visualizing of grouping the data by month and customer type mean
+
+bike_rides_by_month_and_customer_type_mean %>% 
+  ggplot(aes(x = month, y = mean)) +
+  geom_area(aes(group = member_casual, fill = member_casual), 
+            alpha = 0.5, position = position_dodge(0)) +
+  theme_wsj() +
+  scale_fill_wsj() +
+  labs(title = "Figure 16: Mean Duration of Bike Rides by Month and Customer Type",
+       caption = "Data source: Cyclistic, June 2021 - May 2022", 
+       x = "Month", 
+       y = "Duration of bike rides made (in minutes)") +
+  guides(fill = guide_legend(title = "Customer type")) +
+  theme(plot.title = element_text(size = 10, face = "bold")) +
+  theme(plot.caption = element_text(size = 9)) +
+  theme(axis.title.x = element_text(size = 10, face = "italic")) +
+  theme(axis.title.y = element_text(size = 10, face = "italic")) +
+  theme(legend.title = element_text(size = 9)) +
+  theme(legend.text = element_text(size = 8)) +
+  theme(axis.text.x = element_text(size = 8, angle = 90, 
+                                   vjust = 0.5, hjust = 1)) +
+  theme(axis.text.y = element_text(size = 8)) + 
+  geom_vline(xintercept = seq(from = 1, to = 12, by = 1), 
+             linetype = "longdash", color = "white", size = 0.5) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+rm(bike_rides_by_month_and_customer_type_mean)
+
+```
+
+From Figure 17, the mean bike ride duration is about the same across the city (less than 50 minutes) for both annual members and casual riders. However, some occasional bike rides are the highest in the southern part of the city, according to the start bike ride locations. For example, for annual members, the mean duration is the highest in October in the southwestern part of the city; the mean duration is the highest in February in the southwestern part of the city (see black dots).
+
+```{r echo = FALSE, message = FALSE}
+
+## Grouping the data by start location, month and customer type mean
+
+bike_rides_by_start_location_month_and_customer_type_mean <-
+  aggregated_bike_rides %>% 
+  group_by(start_lng, start_lat, month, member_casual) %>% 
+  summarize(count = sum(count),
+            sum = sum(sum_in_minutes)) %>% 
+  ungroup() %>% 
+  mutate(mean = round(sum/count, 1)) %>% 
+  select(start_lng, start_lat, month, member_casual, mean)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width = 10, fig.asp = 0.4}
+
+## Visualizing of grouping the data by start location, month and customer 
+## type mean
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_start_location_month_and_customer_type_mean,
+    aes(x = start_lng, y = start_lat, z = mean),
+    alpha = 0.5, fun = mean, bins = 17) + 
+  scale_fill_gradient(name = "Mean duration of bike rides made (in minutes)",
+                      low = "grey", high = "black") +
+  labs(title = "Figure 17: Mean Duration of Bike rides by Start Locations, Month, and Customer Type",
+  x = "Longtitude",
+  y = "Latitude",
+  caption = "Data source: Cyclistic, June 2021 - May 2022") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ month)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_start_location_month_and_customer_type_mean)
+```
+
+From Figure 18, the mean bike ride duration is about the same across the city (less than 100 minutes) for both annual members and casual riders, with some occasional (more than 100 minutes) bike rides throughout the city. For example, the mean duration for casual riders is the highest in July in the northwestern part of the city (see black dot).
+
+```{r echo = FALSE, message = FALSE}
+
+## Grouping the data by end location, month and customer type mean
+
+bike_rides_by_end_location_month_and_customer_type_mean <-
+  aggregated_bike_rides %>% 
+  group_by(end_lng, end_lat, month, member_casual) %>% 
+  summarize(count = sum(count),
+            sum = sum(sum_in_minutes)) %>% 
+  ungroup() %>% 
+  mutate(mean = round(sum/count, 1)) %>% 
+  select(end_lng, end_lat, month, member_casual, mean)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width = 10, fig.asp = 0.4}
+
+## Visualizing of grouping the data by end location, month and customer 
+## type mean
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_end_location_month_and_customer_type_mean,
+    aes(x = end_lng, y = end_lat, z = mean),
+    alpha = 0.5, fun = mean, bins = 17) + 
+  scale_fill_gradient(name = "Mean duration of bike rides made (in minutes)",
+                      low = "grey", high = "black") +
+  labs(title = "Figure 18: Meand Duration of Bike Rides by End Locations, Month and Customer Type",
+  x = "Longtitude",
+  y = "Latitude",
+  caption = "Data source: Cyclistic, June 2021 - May 2022") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ month)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_end_location_month_and_customer_type_mean)
+```
+
+### 3. The total number, total duration, and mean duration of bike rides by weekday and customer type
+
+#### 1. The total number of bike rides by weekday and customer type
+
+From Figure 19, annual members make roughly two times more bike rides than casual riders on all weekdays except for Sunday and Saturday. The highest number of bike rides made by annual members is on Tuesday, followed by Wednesday and Thursday, whereas the least number of bike rides made is on Sunday and Saturday. For casual riders, the highest number of bike rides made is on Saturday and Sunday, followed by Friday and Thursday, whereas the least number of bike rides is on Wednesday and Tuesday.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Grouping the data by weekday and customer type count
+bike_rides_by_weekday_and_customer_type_count <- aggregated_bike_rides %>% 
+  group_by(day_of_week, member_casual) %>% 
+  summarize(count = sum(count)) %>%
+  ungroup()
+```
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+## Visualizing of grouping the data by weekday and customer type count
+
+bike_rides_by_weekday_and_customer_type_count %>% 
+  ggplot(aes(x = day_of_week, y = count)) +
+  geom_area(aes(group = member_casual, fill = member_casual), 
+            alpha = 0.5, position = position_dodge(0)) +
+  theme_wsj() +
+  scale_fill_wsj() +
+  labs(title = "Figure 19: Total Number of Bike Rides by Weekday and Customer Type",
+       caption = "Data source: Cyclistic, June 2021 - May 2022", 
+       x = "Weekday", 
+       y = "Number of bike rides made") +
+  guides(fill = guide_legend(title = "Customer type")) +
+  theme(plot.title = element_text(size = 10, face = "bold")) +
+  theme(plot.caption = element_text(size = 9)) +
+  theme(axis.title.x = element_text(size = 10, face = "italic")) +
+  theme(axis.title.y = element_text(size = 10, face = "italic")) +
+  theme(legend.title = element_text(size = 9)) +
+  theme(legend.text = element_text(size = 8)) +
+  theme(axis.text.x = element_text(size = 8, 
+                                   vjust = 0.5, hjust = 1)) +
+  theme(axis.text.y = element_text(size = 8)) + 
+  geom_vline(xintercept = seq(from = 1, to = 7, by = 1), 
+             linetype = "longdash", color = "white", size = 0.5) +
+  scale_fill_brewer(palette = "Dark2") +
+  geom_text(aes(color = member_casual, 
+                label = scales::comma(count)), size = 3, 
+            hjust = 0.5, vjust = -0.3, show.legend = FALSE,
+            position = position_jitterdodge(jitter.height = 1, 
+                                            jitter.width = 0.1), 
+            fontface = 2) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma, limits = c(0, 600000))
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_weekday_and_customer_type_count)
+```
+
+Again, the highest number of bike rides is being started in the northeastern part of the city (see Figure 20).
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Grouping the data by start location, weekday and customer type count
+bike_rides_by_start_location_weekday_and_customer_type_count <-
+  aggregated_bike_rides %>% 
+  group_by(start_lng, start_lat, day_of_week, member_casual) %>% 
+  summarize(count = sum(count)) %>% 
+  ungroup()
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by start location, weekday and customer 
+## type count
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_start_location_weekday_and_customer_type_count,
+    aes(x = start_lng, y = start_lat, z = count/1000),
+    fun = sum, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Number of bike rides made (in thousands)", 
+                      low = "green", high = "red") +
+  labs(title = "Figure 20: Total Number of Bike Rides by Start Locations, Weekday, and Customer Type",
+  x = "Longtitude",
+  y = "Latitude",
+  caption = "Data source: Cyclistic, June 2021 - May 2022") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ day_of_week)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_start_location_weekday_and_customer_type_count)
+```
+
+Also, the highest number of bike rides is being ended in the northeastern part of the city (see Figure 21).
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Grouping the data by end location, weekday and customer type count
+bike_rides_by_end_location_weekday_and_customer_type_count <-
+  aggregated_bike_rides %>% 
+  group_by(end_lng, end_lat, day_of_week, member_casual) %>% 
+  summarize(count = sum(count)) %>% 
+  ungroup()
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by end location, weekday and customer 
+## type count
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_end_location_weekday_and_customer_type_count,
+    aes(x = end_lng, y = end_lat, z = count/1000),
+    fun = sum, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Number of bike rides made (in thousands)", 
+                      low = "green", high = "red") +
+  labs(title = "Figure 21: Total Number of Bike Rides by End Locations, Weekday, and Customer Type",
+  x = "Longtitude",
+  y = "Latitude",
+  caption = "Data source: Cyclistic, June 2021 - May 2022") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ day_of_week)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_end_location_weekday_and_customer_type_count)
+```
+
+#### 2. The total duration of bike rides by weekday and customer type
+
+From Figure 22, overall, casual riders spend more time driving bikes than annual members on all weekdays, except for Tuesday and Wednesday, when both customer types have roughly the exact duration of bike rides. Note that annual members' total duration is roughly the same each weekday, somewhere between 95 and 105.5 thousand hours, with the highest total duration on Tuesday and Wednesday and the lowest total duration on Sunday and Friday. In contrast, for casual riders, the total duration is more volatile, with the highest total duration on weekdays (i.e., Saturdays and Sundays), followed by Fridays and Mondays, and the lowest in the middle of the week, Tuesday and Wednesday.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Grouping the data by weekday and customer type sum
+bike_rides_by_weekday_and_customer_type_sum <- aggregated_bike_rides %>% 
+  group_by(day_of_week, member_casual) %>% 
+  summarize(sum = round(sum(sum_in_minutes)/60, 1)) %>% 
+  ungroup()
+```
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+## Visualizing of grouping the data by weekday and customer type sum
+
+bike_rides_by_weekday_and_customer_type_sum %>% 
+  ggplot(aes(x = day_of_week, y = sum/1000)) +
+  geom_area(aes(group = member_casual, fill = member_casual), 
+            alpha = 0.5, position = position_dodge(0)) +
+  theme_wsj() +
+  scale_fill_wsj() +
+  labs(title = "Figure 22: Total Duration of Bike Rides by Weekday and Customer Type",
+       caption = "Data source: Cyclistic, June 2021 - May 2022", 
+       x = "Weekday", 
+       y = "Duration of bike rides made (in thousand hours)") +
+  guides(fill = guide_legend(title = "Customer type")) +
+  theme(plot.title = element_text(size = 10, face = "bold")) +
+  theme(plot.caption = element_text(size = 9)) +
+  theme(axis.title.x = element_text(size = 10, face = "italic")) +
+  theme(axis.title.y = element_text(size = 10, face = "italic")) +
+  theme(legend.title = element_text(size = 9)) +
+  theme(legend.text = element_text(size = 8)) +
+  theme(axis.text.x = element_text(size = 8, 
+                                   vjust = 0.5, hjust = 1)) +
+  theme(axis.text.y = element_text(size = 8)) + 
+  geom_vline(xintercept = seq(from = 1, to = 7, by = 1), 
+             linetype = "longdash", color = "white", size = 0.5) +
+  scale_fill_brewer(palette = "Dark2") +
+  geom_text(aes(color = member_casual, 
+                label = scales::comma(sum)), size = 2.5, 
+            hjust = 0.5, vjust = -0.3, show.legend = FALSE,
+            position = position_jitterdodge(jitter.height = 5, 
+                                            jitter.width = 0.7), 
+            fontface = 2) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma, limits = c(0, 300))
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_weekday_and_customer_type_sum)
+```
+
+Again, the highest total duration of bike rides is in the northeastern part of the city each weekday for both customer types, according to the bike ride starting locations (see Figure 23).
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Grouping the data by start location, weekday and customer type sum
+bike_rides_by_start_location_weekday_and_customer_type_sum <-
+  aggregated_bike_rides %>% 
+  group_by(start_lng, start_lat, day_of_week, member_casual) %>% 
+  summarize(sum = round(sum(sum_in_minutes)/60, 1)) %>% 
+  ungroup()
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by start location, weekday and customer 
+## type sum
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_start_location_weekday_and_customer_type_sum,
+    aes(x = start_lng, y = start_lat, z = sum/1000),
+    fun = sum, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Total duration of bike rides made (in thousand hours)", 
+                      low = "green", high = "red") +
+  labs(title = "Figure 23: Total Duration of Bike Rides by Start Locations, Weekday, and Customer Type",
+  x = "Longtitude",
+  y = "Latitude",
+  caption = "Data source: Cyclistic, June 2021 - May 2022") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ day_of_week)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_start_location_weekday_and_customer_type_sum)
+```
+
+Also, the highest total duration of bike rides is in the northeastern part of the city each weekday for both customer types, according to the bike ride ending locations (see Figure 24).
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Grouping the data by end location, weekday and customer type sum
+bike_rides_by_end_location_weekday_and_customer_type_sum <-
+  aggregated_bike_rides %>% 
+  group_by(end_lng, end_lat, day_of_week, member_casual) %>% 
+  summarize(sum = round(sum(sum_in_minutes)/60, 1)) %>% 
+  ungroup()
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by end location, weekday and customer 
+## type sum
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_end_location_weekday_and_customer_type_sum,
+    aes(x = end_lng, y = end_lat, z = sum/1000),
+    fun = sum, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Total duration of bike rides made (in thousand hours)", 
+                      low = "green", high = "red") +
+  labs(title = "Figure 24: Total Duration of Bike Rides by End Locations, Weekday, and Customer Type",
+  x = "Longtitude",
+  y = "Latitude",
+  caption = "Data source: Cyclistic, June 2021 - May 2022") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ day_of_week)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_end_location_weekday_and_customer_type_sum)
+
+```
+
+#### 3. The mean duration of bike rides by weekday and customer type
+
+From Figure 25, the average bike ride made by casual riders is roughly two times higher than that made by annual members. In addition, both customer types have the highest mean duration on weekend days (Saturday and Sunday). Nevertheless, for annual members, a bike ride is roughly the same each weekday, between 12 and 14.3 minutes. However, for casual riders, the mean bike ride duration is the highest on Sunday and Saturday, followed by Monday and Friday, and the lowest in the middle of the week, Wednesday, followed by Tuesday and Thursday.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Grouping the data by weekday and customer type mean
+bike_rides_by_weekday_and_customer_type_mean <- aggregated_bike_rides %>% 
+  group_by(day_of_week, member_casual) %>% 
+  summarize(count = sum(count),
+            sum = sum(sum_in_minutes)) %>% 
+  ungroup() %>% 
+  mutate(mean = round(sum/count, 1)) %>% 
+  select(day_of_week, member_casual, mean)
+```
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+## Visualizing of grouping the data by weekday and customer type mean
+
+bike_rides_by_weekday_and_customer_type_mean %>% 
+  ggplot(aes(x = day_of_week, y = mean)) +
+  geom_area(aes(group = member_casual, fill = member_casual), 
+            alpha = 0.5, position = position_dodge(0)) +
+  theme_wsj() +
+  scale_fill_wsj() +
+  labs(title = "Figure 25: Mean Duration of Bike Rides by Weekday and Customer Type",
+       caption = "Data source: Cyclistic, June 2021 - May 2022", 
+       x = "Weekday", 
+       y = "Duration of bike rides made (in minutes)") +
+  guides(fill = guide_legend(title = "Customer type")) +
+  theme(plot.title = element_text(size = 10, face = "bold")) +
+  theme(plot.caption = element_text(size = 9)) +
+  theme(axis.title.x = element_text(size = 10, face = "italic")) +
+  theme(axis.title.y = element_text(size = 10, face = "italic")) +
+  theme(legend.title = element_text(size = 9)) +
+  theme(legend.text = element_text(size = 8)) +
+  theme(axis.text.x = element_text(size = 8, 
+                                   vjust = 0.5, hjust = 1)) +
+  theme(axis.text.y = element_text(size = 8)) + 
+  geom_vline(xintercept = seq(from = 1, to = 7, by = 1), 
+             linetype = "longdash", color = "white", size = 0.5) +
+  scale_fill_brewer(palette = "Dark2") +
+  geom_text(aes(color = member_casual, 
+                label = scales::comma(mean, accuracy = 1.1)), size = 3, 
+            hjust = 0.5, vjust = -0.3, show.legend = FALSE,
+            position = position_jitterdodge(jitter.height = 3, 
+                                            jitter.width = 1), 
+            fontface = 2) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_weekday_and_customer_type_mean)
+
+```
+
+Again, the mean duration of bike rides is about the same each weekday throughout the city for both customer types, according to the bike ride starting locations (see Figure 26). Nevertheless, for casual riders on Thursday, the highest mean duration was in the southern part of the city, near Chicago Ridge (see black dot).
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Grouping the data by start location, weekday and customer type mean
+bike_rides_by_start_location_weekday_and_customer_type_mean <-
+  aggregated_bike_rides %>% 
+  group_by(start_lng, start_lat, day_of_week, member_casual) %>% 
+  summarize(count = sum(count),
+            sum = sum(sum_in_minutes)) %>% 
+  ungroup() %>% 
+  mutate(mean = round(sum/count, 1)) %>% 
+  select(start_lng, start_lat, day_of_week, member_casual, mean)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by start location, weekday and customer 
+## type mean
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_start_location_weekday_and_customer_type_mean,
+    aes(x = start_lng, y = start_lat, z = mean),
+    fun = mean, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Mean duration of bike rides made (in minutes)", 
+                      low = "grey", high = "black") +
+  labs(title = "Figure 26: Mean Duration of Bike Rides by Start Locations, Weekday, and Customer Type",
+  x = "Longtitude",
+  y = "Latitude",
+  caption = "Data source: Cyclistic, June 2021 - May 2022") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ day_of_week)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_start_location_weekday_and_customer_type_mean)
+```
+
+Again, the mean duration of bike rides is about the same each weekday throughout the city for both customer types, according to the bike ride ending locations (see Figure 27). Nevertheless, some occasional end locations have a higher mean duration, primarily in the city's western part.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Grouping the data by end location, weekday and customer type mean
+bike_rides_by_end_location_weekday_and_customer_type_mean <-
+  aggregated_bike_rides %>% 
+  group_by(end_lng, end_lat, day_of_week, member_casual) %>% 
+  summarize(count = sum(count),
+            sum = sum(sum_in_minutes)) %>% 
+  ungroup() %>% 
+  mutate(mean = round(sum/count, 1)) %>% 
+  select(end_lng, end_lat, day_of_week, member_casual, mean)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by end location, weekday and customer 
+## type mean
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_end_location_weekday_and_customer_type_mean,
+    aes(x = end_lng, y = end_lat, z = mean),
+    fun = mean, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Mean duration of bike rides made (in minutes)", 
+                      low = "grey", high = "black") +
+  labs(title = "Figure 27: Mean Duration of Bike Rides by End Locations, Weekday, and Customer Type",
+  x = "Longtitude",
+  y = "Latitude",
+  caption = "Data source: Cyclistic, June 2021 - May 2022") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ day_of_week)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_end_location_weekday_and_customer_type_mean)
+```
+
+### 4. The total number, total duration, and mean duration of bike rides by hour and customer type
+
+#### 1. The total number of bike rides by hour and customer types
+
+From Figure 28, annual members have more bike rides than casual riders at all hours, except for between 22 and 4 o'clock, when casual riders have slightly more bike rides than annual members. Both casual riders and annual members have a peak number of bike rides (i.e., more than 20,000) between 15 and 19 o'clock. In contrast, fewer bike rides (i.e., less than 10,000) are made between 22 and 7 o'clock for annual members and between 22 and 10 o'clock for casual riders. Note that the smallest number of bikes is between 2 and 4 o'clock for annual members and between 3 and 5 o-clock for casual riders.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Grouping the data by hour and customer type count
+bike_rides_by_hour_and_customer_type_count <- aggregated_bike_rides %>% 
+  group_by(hour_and_minute, member_casual) %>% 
+  summarize(count = sum(count)) %>%
+  ungroup()
+```
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+## Visualizing of grouping the data by hour and customer type count
+
+bike_rides_by_hour_and_customer_type_count %>%
+  ggplot(aes(x = hour_and_minute, y = count, fill = member_casual)) +
+  theme_wsj() +
+  scale_fill_wsj() +
+  geom_smooth(method = "loess",
+              se = FALSE,
+              formula = 'y ~ x',
+              span = 0) +
+  stat_smooth(se = FALSE, geom = "area",
+              method = 'loess', alpha = .5,
+              span = .4, 
+              color = "black") +
+  labs(title = "Figure 28: Total Number of Bike Rides by Hour and Customer Type",
+       caption = "Data source: Cyclistic, June 2021 - May 2022", 
+       x = "Hour", 
+       y = "Number of bike rides made") +
+  theme(plot.title = element_text(size = 11, face = "bold")) +
+  theme(plot.caption = element_text(size = 9)) +
+  theme(axis.title.x = element_text(size = 10, face = "italic")) +
+  theme(axis.title.y = element_text(size = 10, face = "italic")) +
+  theme(axis.text.x = element_text(size = 8, 
+                                   vjust = 0.5, hjust = 1)) +
+  theme(axis.text.y = element_text(size = 8)) +
+  geom_vline(xintercept = seq(from = 0, to = 24, by = 1), 
+             linetype = "longdash", color = "black", size = 0.2) +
+  scale_x_continuous(breaks = c(0, 2, 4, 6, 8, 10, 12, 14, 
+                                16, 18, 20, 22, 24)) +
+  scale_y_continuous(labels = comma, limits = c(0, 30000)) +
+  guides(fill = guide_legend(title = "Customer type")) +
+  theme(legend.title = element_text(size = 9)) +
+  theme(legend.text = element_text(size = 8)) +
+  scale_fill_brewer(palette = "Dark2")
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_hour_and_customer_type_count)
+```
+
+#### 2. The total duration of bike rides by hour and customer type
+
+From Figure 29, casual riders have a higher total bike ride duration than annual members at all hours, except for between 4 and 10 o'clock, when annual members have a higher total duration of bike rides than casual riders. Casual riders have a total peak duration of bike rides (i.e., more than 6,000 hours) between 11 and 20 o'clock) and the lowest total duration (i.e., less than 2,000 hours) between 24 and 8 o'clock. In contrast, annual members have a total peak duration of bike rides (i.e., more than 6,000 hours) between 16 and 19 o'clock and the lowest total duration (i.e., less than 2,000 hours) between 22 and 7 o'clock.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Grouping the data by hour and customer type sum
+bike_rides_by_hour_and_customer_type_sum <- aggregated_bike_rides %>% 
+  group_by(hour_and_minute, member_casual) %>% 
+  summarize(sum = round(sum(sum_in_minutes)/60, 1)) %>%
+  ungroup()
+```
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+## Visualizing of grouping the data by hour and customer type sum
+
+bike_rides_by_hour_and_customer_type_sum %>%
+  ggplot(aes(x = hour_and_minute, y = sum, fill = member_casual)) +
+  theme_wsj() +
+  scale_fill_wsj() +
+  geom_smooth(method = "loess",
+              se = FALSE,
+              formula = 'y ~ x',
+              span = 0) +
+  stat_smooth(se = FALSE, geom = "area",
+              method = 'loess', alpha = .5,
+              span = .4, 
+              color = "black") +
+  labs(title = "Figure 29: Total Duration of Bike Rides by Hour and Customer Type",
+       caption = "Data source: Cyclistic, June 2021 - May 2022", 
+       x = "Hour", 
+       y = "Duration of bike rides made (in hours)") +
+  theme(plot.title = element_text(size = 11, face = "bold")) +
+  theme(plot.caption = element_text(size = 9)) +
+  theme(axis.title.x = element_text(size = 10, face = "italic")) +
+  theme(axis.title.y = element_text(size = 10, face = "italic")) +
+  theme(axis.text.x = element_text(size = 8, 
+                                   vjust = 0.5, hjust = 1)) +
+  theme(axis.text.y = element_text(size = 8)) +
+  geom_vline(xintercept = seq(from = 0, to = 24, by = 1), 
+             linetype = "longdash", color = "black", size = 0.2) +
+  scale_x_continuous(breaks = c(0, 2, 4, 6, 8, 10, 12, 14, 
+                                16, 18, 20, 22, 24)) +
+  scale_y_continuous(labels = comma, limits = c(0, 8500)) +
+  guides(fill = guide_legend(title = "Customer type")) +
+  theme(legend.title = element_text(size = 9)) +
+  theme(legend.text = element_text(size = 8)) +
+  scale_fill_brewer(palette = "Dark2")
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_hour_and_customer_type_sum)
+```
+
+#### 3. The mean duration of bike rides by hour and customer type
+
+From Figure 30, the duration per bike ride is significantly higher for casual riders than for annual members all day. The mean bike ride duration for annual members is about the same throughout the day, between 10 and 17 o'clock, and the lowest between 5 and 8 o'clock. Note that between 18 and 24 o'clock, the mean duration for casual riders is the same, somewhere between 24 and 25 minutes. At the same time, for casual riders, the mean bike ride duration is about the same each hour, resembling the mean duration of casual riders in the way that it also has the lowest mean duration between 5 and 8 o'clock. In addition, both customer types demonstrate some similar behavior, with the mean duration increasing between 0 and 2 o'clock, then gradually decreasing to the lowest point somewhere between 5 and 8 o'clock, and, then, again increasing and dropping somewhere after 18 o'clock.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Grouping the data by hour and customer type mean
+bike_rides_by_hour_and_customer_type_mean <- aggregated_bike_rides %>% 
+  group_by(hour_and_minute, member_casual) %>% 
+  summarize(count = sum(count),
+            sum = sum(sum_in_minutes)) %>% 
+  ungroup() %>% 
+  mutate(mean = round(sum/count, 1)) %>% 
+  select(hour_and_minute, member_casual, mean)
+```
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+## Visualizing of grouping the data by hour and customer type mean
+
+bike_rides_by_hour_and_customer_type_mean %>%
+  ggplot(aes(x = hour_and_minute, y = mean, fill = member_casual)) +
+  theme_wsj() +
+  scale_fill_wsj() +
+  geom_smooth(method = "loess",
+              se = FALSE,
+              formula = 'y ~ x',
+              span = 0) +
+  stat_smooth(se = FALSE, geom = "area",
+              method = 'loess', alpha = .5,
+              span = .4, 
+              color = "black") +
+  labs(title = "Figure 30: Mean Duration of Bike Rides by Hour and Customer Type",
+       caption = "Data source: Cyclistic, June 2021 - May 2022", 
+       x = "Hour", 
+       y = "Duration of bike rides made (in minutes)") +
+  theme(plot.title = element_text(size = 11, face = "bold")) +
+  theme(plot.caption = element_text(size = 9)) +
+  theme(axis.title.x = element_text(size = 10, face = "italic")) +
+  theme(axis.title.y = element_text(size = 10, face = "italic")) +
+  theme(axis.text.x = element_text(size = 8, 
+                                   vjust = 0.5, hjust = 1)) +
+  theme(axis.text.y = element_text(size = 8)) +
+  geom_vline(xintercept = seq(from = 0, to = 24, by = 1), 
+             linetype = "longdash", color = "black", size = 0.2) +
+  scale_x_continuous(breaks = c(0, 2, 4, 6, 8, 10, 12, 14, 
+                                16, 18, 20, 22, 24)) +
+  scale_y_continuous(labels = comma) +
+  guides(fill = guide_legend(title = "Customer type")) +
+  theme(legend.title = element_text(size = 9)) +
+  theme(legend.text = element_text(size = 8)) +
+  scale_fill_brewer(palette = "Dark2")
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_hour_and_customer_type_mean)
+```
+
+### 5. The total number, total duration, and mean duration of bike rides by weekday, hour and customer type
+
+#### 1. The total number of bike rides by weekday, hour, and customer type
+
+From Figure 31, the number of bikes for annual members does not differ much between weekdays between 16 and 24 o'clock. However, somewhere between 24 and 3 o'clock, the number of bike rides is much higher on the weekend (i.e., Sunday and Saturday) than on non-weekend days. Between 3 and 10 o'clock, the number of bike rides made on Tuesday and Wednesday is the highest, followed by other non-weekend days, with weekend days having the lowest number of bike rides in this period of time. Finally, between 10 and 17 o'clock, the number of bike rides made on weekend days is the highest, followed by Friday. In contrast, for casual riders, the number of bike rides is the highest on weekend days throughout the day, except for between 20 and 24 o'clock on Sunday. Note that the number of bike rides for non-weekend days is the highest on Friday, between 12 and 24 o'clock. All other non-weekend days have a very similar number of bike rides between each other throughout the day.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Grouping the data by weekday, hour and customer type count
+bike_rides_by_weekday_hour_and_customer_type_count <- aggregated_bike_rides %>% 
+  group_by(day_of_week, hour_and_minute, member_casual) %>% 
+  summarize(count = sum(count)) %>%
+  ungroup()
+```
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+## Visualizing of grouping the data by weekday, hour and customer type count
+
+bike_rides_by_weekday_hour_and_customer_type_count %>%
+  ggplot(aes(x = hour_and_minute, y = count)) +
+  theme_wsj() +
+  scale_fill_wsj() +
+  geom_smooth(aes(group = interaction(day_of_week, 
+                                      member_casual), 
+                  color = day_of_week),
+              se = FALSE,
+              formula = 'y ~ x',
+              position = position_dodge(0), size = 1.2) +
+  labs(title = "Figure 31: Number of Bike Rides by Hour, Weekday, and Customer Type",
+       caption = "Data source: Cyclistic, June 2021 - May 2022", 
+       x = "Hour", 
+       y = "Number of bike rides made") +
+  theme(plot.title = element_text(size = 10, face = "bold")) +
+  theme(plot.caption = element_text(size = 9)) +
+  theme(axis.title.x = element_text(size = 10, face = "italic")) +
+  theme(axis.title.y = element_text(size = 10, face = "italic")) +
+  theme(axis.text.x = element_text(size = 8, 
+                                   vjust = 0.5, hjust = 1)) +
+  theme(axis.text.y = element_text(size = 8)) +
+  geom_vline(xintercept = seq(from = 0, to = 24, by = 1), 
+             linetype = "solid", color = "black", size = 0.2) +
+  scale_x_continuous(breaks = c(0, 2, 4, 6, 8, 10, 12, 14, 
+                                16, 18, 20, 22, 24)) +
+  facet_wrap(~ member_casual, ncol = 2 , scales = "free") +
+  scale_color_brewer(palette = "Dark2") +
+  theme(legend.text = element_text(size = 8)) +
+  theme(legend.title = element_text(size = 9)) +
+  guides(color = guide_legend(ncol = 7, byrow = FALSE, 
+                              title = "Weekday")) +
+  scale_y_continuous(labels = comma, limits = c(0, 5000))
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_weekday_hour_and_customer_type_count)
+```
+
+#### 2. The total duration of bike rides by hour, weekday, and customer type
+
+From Figure 32, the total duration for annual members and casual riders is the same for weekend days. For annual members, non-weekend days have roughly the same duration throughout the day. Between 0 and 2 o'clock, the total duration is higher on weekend days than on non-weekend days, whereas between 2 and 10 o'clock, the total duration is the same between non-weekend days and weekend days. Between 10 and 16 o'clock, the total duration is higher on weekend days than on non-weekend days. After 16 o'clock, the total duration is the same between non-weekend and weekend days. For casual riders, the total duration is higher on weekend days than on non-weekend days, roughly throughout the day, except after 21 o'clock on Sunday. On non-weekend days, the total duration is the same, except for between 8 and 19 o'clock, when the total duration on Friday and Monday is higher than on other non-weekend days.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Grouping the data by weekday, hour and customer type sum
+bike_rides_by_weekday_hour_and_customer_type_sum <- aggregated_bike_rides %>% 
+  group_by(day_of_week, hour_and_minute, member_casual) %>% 
+  summarize(sum = round(sum(sum_in_minutes)/60, 1)) %>%
+  ungroup()
+```
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+## Visualizing of grouping the data by weekday, hour and customer type sum
+
+bike_rides_by_weekday_hour_and_customer_type_sum %>%
+  ggplot(aes(x = hour_and_minute, y = sum)) +
+  theme_wsj() +
+  scale_fill_wsj() +
+  geom_smooth(aes(group = interaction(day_of_week, 
+                                      member_casual), 
+                  color = day_of_week),
+              se = FALSE,
+              formula = 'y ~ x',
+              position = position_dodge(0), size = 1.2) +
+  labs(title = "Figure 32: Total Duration of Bike Rides by Hour, Weekday, and Customer Type",
+       caption = "Data source: Cyclistic, June 2021 - May 2022", 
+       x = "Hour", 
+       y = "Duration of bike rides made (in hours)") +
+  theme(plot.title = element_text(size = 9, face = "bold")) +
+  theme(plot.caption = element_text(size = 9)) +
+  theme(axis.title.x = element_text(size = 10, face = "italic")) +
+  theme(axis.title.y = element_text(size = 10, face = "italic")) +
+  theme(axis.text.x = element_text(size = 8, 
+                                   vjust = 0.5, hjust = 1)) +
+  theme(axis.text.y = element_text(size = 8)) +
+  geom_vline(xintercept = seq(from = 0, to = 24, by = 1), 
+             linetype = "solid", color = "black", size = 0.2) +
+  scale_x_continuous(breaks = c(0, 2, 4, 6, 8, 10, 12, 14, 
+                                16, 18, 20, 22, 24)) +
+  facet_wrap(~ member_casual, ncol = 2) +
+  scale_color_brewer(palette = "Dark2") +
+  theme(legend.text = element_text(size = 8)) +
+  theme(legend.title = element_text(size = 9)) +
+  guides(color = guide_legend(ncol = 7, byrow = FALSE, 
+                              title = "Weekday")) +
+  scale_y_continuous(labels = comma)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_weekday_hour_and_customer_type_sum)
+```
+
+#### 3. The mean duration of bike rides by hour, weekday, and customer type
+
+From Figure 33, the mean duration is higher on weekend days compared to non-weekend days for annual members between 1 and 22 o'clock. For casual riders, the mean duration is higher on Sunday and Saturday than on non-weekend days between 3 and 24 o'clock and between 4 and 24 o'clock, respectively. Note also that the mean duration is higher on Monday, followed by Friday, than on any other non-weekend day throughout the day. All other non-weekend days have very similar mean duration throughout the day.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Grouping the data by weekday, hour and customer type mean
+bike_rides_by_weekday_hour_and_customer_type_mean <- aggregated_bike_rides %>% 
+  group_by(day_of_week, hour_and_minute, member_casual) %>% 
+  summarize(count = sum(count),
+            sum = sum(sum_in_minutes)) %>% 
+  ungroup() %>% 
+  mutate(mean = round(sum/count, 1)) %>% 
+  select(day_of_week, hour_and_minute, member_casual, mean)
+```
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+## Visualizing of grouping the data by weekday, hour and customer type mean
+
+bike_rides_by_weekday_hour_and_customer_type_mean %>%
+  ggplot(aes(x = hour_and_minute, y = mean)) +
+  theme_wsj() +
+  scale_fill_wsj() +
+  geom_smooth(aes(group = interaction(day_of_week, 
+                                      member_casual), 
+                  color = day_of_week),
+              se = FALSE,
+              formula = 'y ~ x',
+              position = position_dodge(0), size = 1.2) +
+  labs(title = "Figure 33: Mean Duration of Bike Rides by Hour, Weekday, and Customer Type",
+       caption = "Data source: Cyclistic, June 2021 - May 2022", 
+       x = "Hour", 
+       y = "Duration of bike rides made (in minutes)") +
+  theme(plot.title = element_text(size = 10, face = "bold")) +
+  theme(plot.caption = element_text(size = 9)) +
+  theme(axis.title.x = element_text(size = 10, face = "italic")) +
+  theme(axis.title.y = element_text(size = 10, face = "italic")) +
+  theme(axis.text.x = element_text(size = 8, 
+                                   vjust = 0.5, hjust = 1)) +
+  theme(axis.text.y = element_text(size = 8)) +
+  geom_vline(xintercept = seq(from = 0, to = 24, by = 1), 
+             linetype = "solid", color = "black", size = 0.2) +
+  scale_x_continuous(breaks = c(0, 2, 4, 6, 8, 10, 12, 14, 
+                                16, 18, 20, 22, 24)) +
+  facet_wrap(~ member_casual, ncol = 2) +
+  scale_color_brewer(palette = "Dark2") +
+  theme(legend.text = element_text(size = 8)) +
+  theme(legend.title = element_text(size = 9)) +
+  guides(color = guide_legend(ncol = 7, byrow = FALSE, 
+                              title = "Weekday")) +
+  scale_y_continuous(labels = comma)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_weekday_hour_and_customer_type_mean)
+```
+
+### 6. The total number, total duration, and mean duration of bike rides by rideable type and customer type
+
+#### 1. The total number of bike rides by rideable type and customer type
+
+From Figure 34, annual members do not use docked bikes. Both customer types use classic bikes more frequently than any other bike type, followed by electric and docked bikes (if any).
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Grouping the data by customer type and rideable type count
+bike_rides_by_rideable_and_customer_types_count <- aggregated_bike_rides %>% 
+  group_by(member_casual, rideable_type) %>% 
+  summarize(count = sum(count)) %>%
+  ungroup()
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by customer type and rideable type count
+
+bike_rides_by_rideable_and_customer_types_count %>% 
+  ggplot(aes(x = member_casual, y = count, 
+             fill = rideable_type, group = rideable_type)) + 
+  geom_bar(stat = "identity", position = "dodge", color = "black") +
+  theme_wsj() +
+  scale_fill_wsj() +
+  geom_text(aes(label = scales::comma(count)), 
+            size = 4, 
+            hjust = 0.5, vjust = -0.2,
+            position = position_dodge(width = .9)) +
+  labs(title = "Figure 34: Total Number of Bike Rides by Customer Type and Rideable Type",
+       caption = "Data source: Cyclistic, June 2021 - May 2022", 
+       x = "Customer type", 
+       y = "Number of bike rides made") +
+  guides(fill = guide_legend(title = "Rideable Type")) +
+  theme(plot.title = element_text(size = 9.35, face = "bold")) +
+  theme(plot.caption = element_text(size = 9)) +
+  theme(axis.title.x = element_text(size = 9, face = "italic")) +
+  theme(axis.title.y = element_text(size = 9, face = "italic")) +
+  theme(legend.title = element_text(size = 9)) +
+  theme(legend.text = element_text(size = 8)) + #change legend title font size 
+  theme(axis.text.x = element_text(size = 8)) +
+  theme(axis.text.y = element_text(size = 8)) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_color_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma, limits = c(0, 2100000))
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_rideable_and_customer_types_count)
+
+```
+
+From Figure 35, the highest number of bike rides is started in the northeastern part of the city, with fewer bike rides made with the help of classic or docked bikes starting in the southern part of the city. Another finding is that bike rides made with the help of electric bikes have significantly wider start locations than those made with the help of classic and docked bikes.
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+## Grouping the data by start location, customer type, and rideable type count
+bike_rides_by_start_location_customer_and_rideable_type_count <-
+  aggregated_bike_rides %>% 
+  group_by(start_lng, start_lat, member_casual, rideable_type) %>% 
+  summarize(count = sum(count)) %>% 
+  ungroup()
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by start location, customer and rideable type count
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_start_location_customer_and_rideable_type_count,
+    aes(x = start_lng, y = start_lat, z = count/1000),
+    fun = sum, alpha = 0.6, bins = 30) + 
+  scale_fill_gradient(name = "Number of bike rides made (in thousands)", 
+                      low = "green", high = "red") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 35: Total Number of Bike Rides by Start Locations, Rideable Type, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ rideable_type)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_start_location_customer_and_rideable_type_count)
+
+```
+
+From Figure 36, the highest number of bike rides is ended in the northeastern part of the city for both customer types, with fewer bike rides made with the help of classic or docked bikes ending in the southern part of the city. Also, bike rides made with the help of electric bikes have much broader end locations compared to those made with the help of classic and docked bikes. In addition, casual riders who use electric bikes have much broader ending locations than annual members who use electric bikes.
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+## Grouping the data by end location, customer type, and rideable type count
+bike_rides_by_end_location_customer_and_rideable_type_count <-
+  aggregated_bike_rides %>% 
+  group_by(end_lng, end_lat, member_casual, rideable_type) %>% 
+  summarize(count = sum(count)) %>% 
+  ungroup()
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by end location, customer and rideable type count
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_end_location_customer_and_rideable_type_count,
+    aes(x = end_lng, y = end_lat, z = count/1000),
+    fun = sum, alpha = 0.6, bins = 30) + 
+  scale_fill_gradient(name = "Number of bike rides made (in thousands)", 
+                      low = "green", high = "red") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 36: Total Number of Bike Rides by End Locations, Rideable Type, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ rideable_type)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_end_location_customer_and_rideable_type_count)
+```
+
+#### 2. The total duration of bike rides by rideable type and customer type
+
+From Figure 37, the total duration of bike rides is the highest for those customers who use casual bikes, followed by those who use electric and docked bikes (if any) for both customer types. Also, casual riders spend more time driving using classic and electric bikes than annual members.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+
+## Grouping the data by customer type and rideable type sum
+bike_rides_by_rideable_and_customer_types_sum <- aggregated_bike_rides %>% 
+  group_by(member_casual, rideable_type) %>% 
+  summarize(sum = round(sum(sum_in_minutes)/60, 1)) %>%
+  ungroup()
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by customer type and rideable type sum
+
+bike_rides_by_rideable_and_customer_types_sum %>% 
+  ggplot(aes(x = member_casual, y = sum, 
+             fill = rideable_type, group = rideable_type)) + 
+  geom_bar(stat = "identity", position = "dodge", color = "black") +
+  theme_wsj() +
+  scale_fill_wsj() +
+  geom_text(aes(label = scales::comma(sum)), 
+            size = 4, 
+            hjust = 0.5, vjust = -0.2,
+            position = position_dodge(width = .9)) +
+  labs(title = "Figure 37: Total Duration of Bike Rides by Customer Type and Rideable Type",
+       caption = "Data source: Cyclistic, June 2021 - May 2022", 
+       x = "Customer type", 
+       y = "Duration of bike rides made (in hours)") +
+  guides(fill = guide_legend(title = "Rideable Type")) +
+  theme(plot.title = element_text(size = 9.35, face = "bold")) +
+  theme(plot.caption = element_text(size = 9)) +
+  theme(axis.title.x = element_text(size = 9, face = "italic")) +
+  theme(axis.title.y = element_text(size = 9, face = "italic")) +
+  theme(legend.title = element_text(size = 9)) +
+  theme(legend.text = element_text(size = 8)) + #change legend title font size 
+  theme(axis.text.x = element_text(size = 8)) +
+  theme(axis.text.y = element_text(size = 8)) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_color_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma, limits = c(0, 600000))
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_rideable_and_customer_types_sum)
+```
+
+From Figure 37, the total duration of bike rides is the highest in the northeastern part of the city, according to bike ride starting locations.
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+## Grouping the data by start location, customer type, and rideable type sum
+bike_rides_by_start_location_customer_and_rideable_type_sum <-
+  aggregated_bike_rides %>% 
+  group_by(start_lng, start_lat, member_casual, rideable_type) %>% 
+  summarize(sum = round(sum(sum_in_minutes)/60, 1)) %>%
+  ungroup()
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by start location, customer and rideable type sum
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_start_location_customer_and_rideable_type_sum,
+    aes(x = start_lng, y = start_lat, z = sum/1000),
+    fun = sum, alpha = 0.6, bins = 30) + 
+  scale_fill_gradient(name = "Total duration of bike rides made (in thousand hours)", 
+                      low = "green", high = "red") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 38: Total Duration of Bike Rides by Start Locations, Rideable Type, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ rideable_type)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_start_location_customer_and_rideable_type_sum)
+```
+
+From Figure 39, the total duration of bike rides is the highest in the northeastern part of the city, according to bike ride ending locations.
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+## Grouping the data by end location, customer type, and rideable type sum
+bike_rides_by_end_location_customer_and_rideable_type_sum <-
+  aggregated_bike_rides %>% 
+  group_by(end_lng, end_lat, member_casual, rideable_type) %>% 
+  summarize(sum = round(sum(sum_in_minutes)/60, 1)) %>%
+  ungroup()
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by end location, customer and rideable type sum
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_end_location_customer_and_rideable_type_sum,
+    aes(x = end_lng, y = end_lat, z = sum/1000),
+    fun = sum, alpha = 0.6, bins = 30) + 
+  scale_fill_gradient(name = "Total duration of bike rides made (in thousand hours)", 
+                      low = "green", high = "red") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 39: Total Duration of Bike Rides by End Locations, Rideable Type, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ rideable_type)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_end_location_customer_and_rideable_type_sum)
+```
+
+#### 3. The mean duration of bike rides by rideable type and customer type
+
+From Figure 40, annual members have the same mean bike ride duration for electric and classic bikes. However, for casual riders, the mean duration is the highest for those who drive docked bikes, two times compared to those who drive electric and classic bikes, with electric bike casual riders having the lowest mean duration. Note that the mean duration for casual riders who drive electric and classic bikes is roughly two times that for annual members who drive electric and classic bikes.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Grouping the data by customer type and rideable type mean
+bike_rides_by_rideable_and_customer_types_mean <- aggregated_bike_rides %>% 
+  group_by(member_casual, rideable_type) %>% 
+  summarize(count = sum(count),
+            sum = sum(sum_in_minutes)) %>% 
+  ungroup() %>% 
+  mutate(mean = round(sum/count, 1)) %>% 
+  select(member_casual, rideable_type, mean)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by customer type and rideable type mean
+
+bike_rides_by_rideable_and_customer_types_mean %>% 
+  ggplot(aes(x = member_casual, y = mean, 
+             fill = rideable_type, group = rideable_type)) + 
+  geom_bar(stat = "identity", position = "dodge", color = "black") +
+  theme_wsj() +
+  scale_fill_wsj() +
+  geom_text(aes(label = scales::comma(mean)), 
+            size = 4, 
+            hjust = 0.5, vjust = -0.2,
+            position = position_dodge(width = .9)) +
+  labs(title = "Figure 40: Mean Duration of Bike Rides by Customer Type and Rideable Type",
+       caption = "Data source: Cyclistic, June 2021 - May 2022", 
+       x = "Customer type", 
+       y = "Duration of bike rides made (in minutes)") +
+  guides(fill = guide_legend(title = "Rideable Type")) +
+  theme(plot.title = element_text(size = 9.35, face = "bold")) +
+  theme(plot.caption = element_text(size = 9)) +
+  theme(axis.title.x = element_text(size = 9, face = "italic")) +
+  theme(axis.title.y = element_text(size = 9, face = "italic")) +
+  theme(legend.title = element_text(size = 9)) +
+  theme(legend.text = element_text(size = 8)) + #change legend title font size 
+  theme(axis.text.x = element_text(size = 8)) +
+  theme(axis.text.y = element_text(size = 8)) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_color_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma, limits = c(0, 50))
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_rideable_and_customer_types_mean)
+```
+
+From Figure 41, those customers who drive docked bikes have a higher mean duration in any part of the city than those who drive electric or classic bikes.
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+## Grouping the data by start location, customer type, and rideable type mean
+bike_rides_by_start_location_customer_and_rideable_type_mean <-
+  aggregated_bike_rides %>% 
+  group_by(start_lng, start_lat, member_casual, rideable_type) %>% 
+  summarize(count = sum(count),
+            sum = sum(sum_in_minutes)) %>% 
+  ungroup() %>% 
+  mutate(mean = round(sum/count, 1)) %>% 
+  select(start_lng, start_lat, member_casual, rideable_type, mean)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by start location, customer and rideable type mean
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_start_location_customer_and_rideable_type_mean,
+    aes(x = start_lng, y = start_lat, z = mean),
+    fun = mean, alpha = 0.6, bins = 30) + 
+  scale_fill_gradient(name = "Mean duration of bike rides made (in minutes)", 
+                      low = "grey", high = "black") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 41: Mean Duration of Bike Rides by Start Locations, Rideable Type, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ rideable_type)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_start_location_customer_and_rideable_type_mean)
+```
+
+From Figure 42, bike riders who drive classic or docked bikes drive significantly less in the southern part of the city than electric bike riders.
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+## Grouping the data by end location, customer type, and rideable type mean
+bike_rides_by_end_location_customer_and_rideable_type_mean <-
+  aggregated_bike_rides %>% 
+  group_by(end_lng, end_lat, member_casual, rideable_type) %>% 
+  summarize(count = sum(count),
+            sum = sum(sum_in_minutes)) %>% 
+  ungroup() %>% 
+  mutate(mean = round(sum/count, 1)) %>% 
+  select(end_lng, end_lat, member_casual, rideable_type, mean)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by end location, customer and rideable type mean
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_end_location_customer_and_rideable_type_mean,
+    aes(x = end_lng, y = end_lat, z = mean),
+    fun = mean, alpha = 0.6, bins = 30) + 
+  scale_fill_gradient(name = "Mean duration of bike rides made (in minutes)", 
+                      low = "grey", high = "black") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 42: Mean Duration of Bike Rides by End Locations, Rideable Type, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ rideable_type)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_end_location_customer_and_rideable_type_mean)
+```
+
+### 7. The total number, total duration, and mean duration of bike rides by month, rideable type and customer type
+
+#### 1. The total number of bike rides by month, rideable type, and customer type
+
+From Figure 43, annual members who drive classic bikes make more bike rides than those who drive electric bikes between May and October, with a peak number of bike rides between June and September. At the same time, casual riders who drive classic bikes make more bike rides than those who drive electric cars between June and September, with a peak number of bike rides in July and August. In contrast, annual members who drive electric cars make most of their bike rides in May and October, whereas for casual riders, it is July, August, and June (summer). Between November and April, electric bikes and classic bike drivers have the same number of bikes for annual members. In contrast, for casual riders, between January and May, there is no significant difference between electric bikes and classic bike drivers. Bike rides made with docked bikes are always less than rides with other types, except for January and February, when the number of rides with docked bikes is roughly the same as ones with electric or classic bikes. Between October and December, the number of bike rides with electric bikes is higher than this made with classic bikes.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Grouping the data by month, customer type and rideable type count
+
+bike_rides_by_month_rideable_and_customer_types_count <-
+  aggregated_bike_rides %>% 
+  group_by(month, member_casual, rideable_type) %>% 
+  summarize(count = sum(count)) %>%
+  ungroup()
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by month, customer type and rideable type count
+
+bike_rides_by_month_rideable_and_customer_types_count %>% 
+  ggplot(aes(x = month, y = count)) +
+  theme_wsj() +
+  scale_fill_wsj() +
+  geom_line(aes(group = rideable_type, color = rideable_type),
+              position = position_dodge(0), size = 1.5) +
+  labs(title = "Figure 43: Total Number of Bike Rides by Month, Rideable Type, and Customer Type",
+       caption = "Data source: Cyclistic, June 2021 - May 2022", 
+       x = "Month", 
+       y = "Number of bike rides made") +
+  theme(plot.title = element_text(size = 9, face = "bold")) +
+  theme(plot.caption = element_text(size = 9)) +
+  theme(axis.title.x = element_text(size = 10, face = "italic")) +
+  theme(axis.title.y = element_text(size = 10, face = "italic")) +
+  theme(axis.text.x = element_text(size = 8, 
+                                   vjust = 0.5, hjust = 1,
+                                   angle = 90)) +
+  theme(axis.text.y = element_text(size = 8)) +
+  geom_vline(xintercept = seq(from = 1, to = 12, by = 1), 
+             linetype = "longdash", color = "black", size = 0.2) +
+  scale_color_brewer(palette = "Dark2") +
+  theme(legend.text = element_text(size = 8)) +
+  theme(legend.title = element_text(size = 9)) +
+  guides(color = guide_legend(ncol = 5, byrow = FALSE, 
+                              title = "Rideable Type")) +
+  facet_grid(~ member_casual) +
+  scale_y_continuous(labels = comma, limits = c(0, 300000))
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_month_rideable_and_customer_types_count)
+```
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+## Grouping the data by start location, month, rideable type, and customer type count
+
+bike_rides_by_start_location_month_rideable_and_customer_type_count <-
+  aggregated_bike_rides %>% 
+  group_by(start_lng, start_lat, month, rideable_type, member_casual) %>% 
+  summarize(count = sum(count)) %>% 
+  ungroup()
+```
+
+Both customer types have very similar spatial patterns, with the most significant number of bike rides starting and ending in the city's northeastern part (see Figures 44, 45, 46, 47, 48, and 49). However, for annual members, the second-highest number of electric bike rides started and ended in the southeastern part of the city (see Figures 44 and 47). Note that for classic and docked bikes for both customers, the number of bike rides in the southern part is the smallest in winter, followed by spring and autumn, and the highest in summer.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width = 10, fig.asp = 0.4}
+
+## Visualizing of grouping the data by start location, customer and rideable type count for electric bikes
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_start_location_month_rideable_and_customer_type_count %>% 
+      filter(rideable_type == "Electric"),
+    aes(x = start_lng, y = start_lat, z = count/1000),
+    fun = sum, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Total number of bike rides made (in thousands)", 
+                      low = "green", high = "red") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 44: Total Number of Bike Rides Using Electric Bikes by Start Locations, Month, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ month)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width = 10, fig.asp = 0.4}
+
+## Visualizing of grouping the data by start location, customer and rideable type count for classic bikes
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_start_location_month_rideable_and_customer_type_count %>% 
+      filter(rideable_type == "Classic"),
+    aes(x = start_lng, y = start_lat, z = count/1000),
+    fun = sum, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Total number of bike rides made (in thousands)", 
+                      low = "green", high = "red") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 45: Total Number of Bike Rides Using Classic Bikes by Start Locations, Month, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ month)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width = 10, fig.asp = 0.4}
+
+## Visualizing of grouping the data by start location, customer and rideable type count for docked bikes
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_start_location_month_rideable_and_customer_type_count %>% 
+      filter(rideable_type == "Docked"),
+    aes(x = start_lng, y = start_lat, z = count/1000),
+    fun = sum, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Total number of bike rides made (in thousands)", 
+                      low = "green", high = "red") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 46: Total Number of Bike Rides Using Docked Bikes by Start Locations, Month, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ month)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_start_location_month_rideable_and_customer_type_count)
+```
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+## Grouping the data by end location, month, rideable type, and customer type count
+
+bike_rides_by_end_location_month_rideable_and_customer_type_count <-
+  aggregated_bike_rides %>% 
+  group_by(end_lng, end_lat, month, rideable_type, member_casual) %>% 
+  summarize(count = sum(count)) %>% 
+  ungroup()
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width = 10, fig.asp = 0.4}
+
+## Visualizing of grouping the data by end location, customer and rideable type count for electric bikes
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_end_location_month_rideable_and_customer_type_count %>% 
+      filter(rideable_type == "Electric"),
+    aes(x = end_lng, y = end_lat, z = count/1000),
+    fun = sum, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Total number of bike rides made (in thousands)", 
+                      low = "green", high = "red") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 47: Total Number of Bike Rides Using Electric Bikes by End Locations, Month, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ month)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width = 10, fig.asp = 0.4}
+
+## Visualizing of grouping the data by end location, customer and rideable type count for classic bikes
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_end_location_month_rideable_and_customer_type_count %>% 
+      filter(rideable_type == "Classic"),
+    aes(x = end_lng, y = end_lat, z = count/1000),
+    fun = sum, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Total number of bike rides made (in thousands)", 
+                      low = "green", high = "red") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 48: Total Number of Bike Rides Using Classic Bikes by End Locations, Month, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ month)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width = 10, fig.asp = 0.4}
+
+## Visualizing of grouping the data by end location, customer and rideable type count for docked bikes
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_end_location_month_rideable_and_customer_type_count %>% 
+      filter(rideable_type == "Docked"),
+    aes(x = end_lng, y = end_lat, z = count/1000),
+    fun = sum, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Total number of bike rides made (in thousands)", 
+                      low = "green", high = "red") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 49: Total Number of Bike Rides Using Docked Bikes by End Locations, Month, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ month)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_end_location_month_rideable_and_customer_type_count)
+```
+
+#### 2. The total duration of bike rides by month, rideable type, and customer type
+
+From Figure 50, for annual members, the total duration for bike rides using classic bikes is higher than for bike rides using electric bikes between May and October, whereas, between November and April, the total duration between the two rideable types is the same. Similarly, for casual riders, the total duration for bike rides using classic bikes is higher than for bike rides using electric or docked bikes between May and September. Between October and April, the total duration of bike rides is roughly the same between electric and classic bike riders. Classic, electric, and docked riders have the same total trip duration between January and February. Note that docked bike riders also have the same bike ride duration as electric bike riders in June, whereas in all other months, they have the least total bike ride duration. For annual members and casual riders who drive classic bikes, the highest total duration is in the summer (July and August, followed by June) and September, followed by autumn and spring. For annual members, who drive electric bikes, the highest total duration is in May and October, followed by the summer months and September, which have very similar total duration. In contrast, the highest total duration for casual riders who drive electric bikes is in summer (July), followed by spring and autumn. For casual riders who drive docked bikes, the highest total duration is in June and July, followed by August. For all bike riders, the least total duration (less than 25,000 hours) is in winter, followed by November, March, and April.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Grouping the data by month, customer type and rideable type sum
+
+bike_rides_by_month_rideable_and_customer_types_sum <-
+  aggregated_bike_rides %>% 
+  group_by(month, member_casual, rideable_type) %>% 
+  summarize(sum = round(sum(sum_in_minutes)/60, 1)) %>% 
+  ungroup()
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by month, customer type and rideable type sum
+
+bike_rides_by_month_rideable_and_customer_types_sum %>% 
+  ggplot(aes(x = month, y = sum)) +
+  theme_wsj() +
+  scale_fill_wsj() +
+  geom_line(aes(group = rideable_type, color = rideable_type),
+              position = position_dodge(0), size = 1.5) +
+  labs(title = "Figure 50: Total Duration of Bike Rides by Month, Rideable Type, and Customer Type",
+       caption = "Data source: Cyclistic, June 2021 - May 2022", 
+       x = "Month", 
+       y = "Duration of bike rides made (in hours)") +
+  theme(plot.title = element_text(size = 9, face = "bold")) +
+  theme(plot.caption = element_text(size = 9)) +
+  theme(axis.title.x = element_text(size = 10, face = "italic")) +
+  theme(axis.title.y = element_text(size = 10, face = "italic")) +
+  theme(axis.text.x = element_text(size = 8, 
+                                   vjust = 0.5, hjust = 1,
+                                   angle = 90)) +
+  theme(axis.text.y = element_text(size = 8)) +
+  geom_vline(xintercept = seq(from = 1, to = 12, by = 1), 
+             linetype = "longdash", color = "black", size = 0.2) +
+  scale_color_brewer(palette = "Dark2") +
+  theme(legend.text = element_text(size = 8)) +
+  theme(legend.title = element_text(size = 9)) +
+  guides(color = guide_legend(ncol = 5, byrow = FALSE, 
+                              title = "Rideable Type")) +
+  facet_grid(~ member_casual) +
+  scale_y_continuous(labels = comma, limits = c(0, 120000))
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_month_rideable_and_customer_types_sum)
+```
+
+The highest total duration for both customer types starts and ends in the northeastern part of the city (see Figures 51, 52, 53, 54, 55, and 56).
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+## Grouping the data by start location, month, rideable type, and customer type sum
+
+bike_rides_by_start_location_month_rideable_and_customer_type_sum <-
+  aggregated_bike_rides %>% 
+  group_by(start_lng, start_lat, month, rideable_type, member_casual) %>% 
+  summarize(sum = round(sum(sum_in_minutes)/60, 1)) %>% 
+  ungroup()
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width = 10, fig.asp = 0.4}
+
+## Visualizing of grouping the data by start location, customer and rideable type sum for electric bikes
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_start_location_month_rideable_and_customer_type_sum %>% 
+      filter(rideable_type == "Electric"),
+    aes(x = start_lng, y = start_lat, z = sum/1000),
+    fun = sum, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Total duration of bike rides made (in thousand hours)", 
+                      low = "green", high = "red") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 51: Total Duration of Bike Rides Using Electric Bikes by Start Locations, Month, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ month)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width = 10, fig.asp = 0.4}
+
+## Visualizing of grouping the data by start location, customer and rideable type sum for classic bikes
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_start_location_month_rideable_and_customer_type_sum %>% 
+      filter(rideable_type == "Classic"),
+    aes(x = start_lng, y = start_lat, z = sum/1000),
+    fun = sum, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Total duration of bike rides made (in thousand hours)", 
+                      low = "green", high = "red") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 52: Total Duration of Bike Rides Using Classic Bikes by Start Locations, Month, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ month)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width = 10, fig.asp = 0.4}
+
+## Visualizing of grouping the data by start location, customer and rideable type sum for docked bikes
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_start_location_month_rideable_and_customer_type_sum %>% 
+      filter(rideable_type == "Docked"),
+    aes(x = start_lng, y = start_lat, z = sum/1000),
+    fun = sum, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Total duration of bike rides made (in thousand hours)", 
+                      low = "green", high = "red") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 53: Total Duration of Bike Rides Using Docked Bikes by Start Locations, Month, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ month)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_start_location_month_rideable_and_customer_type_sum)
+```
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+## Grouping the data by end location, month, rideable type, and customer type sum
+
+bike_rides_by_end_location_month_rideable_and_customer_type_sum <-
+  aggregated_bike_rides %>% 
+  group_by(end_lng, end_lat, month, rideable_type, member_casual) %>% 
+  summarize(sum = round(sum(sum_in_minutes)/60, 1)) %>% 
+  ungroup()
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width = 10, fig.asp = 0.4}
+
+## Visualizing of grouping the data by end location, customer and rideable type sum for electric bikes
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_end_location_month_rideable_and_customer_type_sum %>% 
+      filter(rideable_type == "Electric"),
+    aes(x = end_lng, y = end_lat, z = sum/1000),
+    fun = sum, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Total duration of bike rides made (in thousand hours)", 
+                      low = "green", high = "red") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 54: Total Duration of Bike Rides Using Electric Bikes by End Locations, Month, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+
+        plot.title = element_text(size = 10, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ month)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width = 10, fig.asp = 0.4}
+
+## Visualizing of grouping the data by end location, customer and rideable type sum for classic bikes
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_end_location_month_rideable_and_customer_type_sum %>% 
+      filter(rideable_type == "Classic"),
+    aes(x = end_lng, y = end_lat, z = sum/1000),
+    fun = sum, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Total duration of bike rides made (in thousand hours)", 
+                      low = "green", high = "red") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 55: Total Duration of Bike Rides Using Classic Bikes by End Locations, Month, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ month)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width = 10, fig.asp = 0.4}
+
+## Visualizing of grouping the data by end location, customer and rideable type sum for docked bikes
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_end_location_month_rideable_and_customer_type_sum %>% 
+      filter(rideable_type == "Docked"),
+    aes(x = end_lng, y = end_lat, z = sum/1000),
+    fun = sum, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Total duration of bike rides made (in thousand hours)", 
+                      low = "green", high = "red") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 56: Total Duration of Bike Rides Using Docked Bikes by End Locations, Month, Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ month)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_end_location_month_rideable_and_customer_type_sum)
+```
+
+#### 3. The mean duration of bike rides by month, rideable type, and customer type
+
+From Figure 57, annual members who drive electric and classic bikes do not differ in the mean trip duration and have relatively stable bike ride duration each month (somewhere between 15 and 18 minutes), with the lowest mean duration in winter and the highest in summer and September. In contrast, the mean duration for casual riders is the highest for docked bike riders (above 40 minutes per trip), followed by electric (above 20 minutes) and classic bike (somewhere between 18 and 22 minutes) riders. In this case, the lowest mean duration for all rideable types is in winter, and the highest is in summer. For example, for electric bike casual riders, between June and August, the mean duration reaches above 20 minutes per trip. Note that the mean duration increases step-by-step: it reaches a peak in March, then it again reaches a peak in June and then in October.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Grouping the data by month, customer type and rideable type mean
+
+bike_rides_by_month_rideable_and_customer_types_mean <-
+  aggregated_bike_rides %>% 
+  group_by(month, member_casual, rideable_type) %>% 
+  summarize(count = sum(count),
+            sum = sum(sum_in_minutes)) %>% 
+  ungroup() %>% 
+  mutate(mean = round(sum/count, 1)) %>% 
+  select(month, member_casual, rideable_type, mean)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by month, customer type and rideable type mean
+
+bike_rides_by_month_rideable_and_customer_types_mean %>% 
+  ggplot(aes(x = month, y = mean)) +
+  theme_wsj() +
+  scale_fill_wsj() +
+  geom_line(aes(group = rideable_type, color = rideable_type),
+              position = position_dodge(0), size = 1.5) +
+  labs(title = "Figure 57: Mean Duration of Bike Rides by Month, Rideable Type, and Customer Type",
+       caption = "Data source: Cyclistic, June 2021 - May 2022", 
+       x = "Month", 
+       y = "Duration of bike rides made (in minutes)") +
+  theme(plot.title = element_text(size = 9, face = "bold")) +
+  theme(plot.caption = element_text(size = 9)) +
+  theme(axis.title.x = element_text(size = 10, face = "italic")) +
+  theme(axis.title.y = element_text(size = 10, face = "italic")) +
+  theme(axis.text.x = element_text(size = 8, 
+                                   vjust = 0.5, hjust = 1,
+                                   angle = 90)) +
+  theme(axis.text.y = element_text(size = 8)) +
+  geom_vline(xintercept = seq(from = 1, to = 12, by = 1), 
+             linetype = "longdash", color = "black", size = 0.2) +
+  scale_color_brewer(palette = "Dark2") +
+  theme(legend.text = element_text(size = 8)) +
+  theme(legend.title = element_text(size = 9)) +
+  guides(color = guide_legend(ncol = 5, byrow = FALSE, 
+                              title = "Rideable Type")) +
+  facet_grid(~ member_casual) +
+  scale_y_continuous(labels = comma, limits = c(0, 60))
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_month_rideable_and_customer_types_mean)
+
+```
+
+Figures 58, 59, 60, 61, 62, and 63 do not show spatial patterns except in occasional or random places that are indicated by black dots.
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+## Grouping the data by start location, month, rideable type, and customer type mean
+
+bike_rides_by_start_location_month_rideable_and_customer_type_mean <-
+  aggregated_bike_rides %>% 
+  group_by(start_lng, start_lat, month, rideable_type, member_casual) %>% 
+  summarize(count = sum(count),
+            sum = sum(sum_in_minutes)) %>% 
+  ungroup() %>% 
+  mutate(mean = round(sum/count, 1)) %>% 
+  select(start_lng, start_lat, month, rideable_type, member_casual, mean)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width = 10, fig.asp = 0.4}
+
+## Visualizing of grouping the data by start location, customer and rideable type mean for electric bikes
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_start_location_month_rideable_and_customer_type_mean %>% 
+      filter(rideable_type == "Electric"),
+    aes(x = start_lng, y = start_lat, z = mean),
+    fun = mean, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Mean duration of bike rides made (in minutes)", 
+                      low = "grey", high = "black") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 58: Mean Duration of Bike Rides Using Electric Bikes by Start Locations, Month, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ month)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width = 10, fig.asp = 0.4}
+
+## Visualizing of grouping the data by start location, customer and rideable type mean for classic bikes
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_start_location_month_rideable_and_customer_type_mean %>% 
+      filter(rideable_type == "Classic"),
+    aes(x = start_lng, y = start_lat, z = mean),
+    fun = mean, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Mean duration of bike rides made (in minutes)", 
+                      low = "grey", high = "black") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 59: Mean Duration of Bike Rides Using Classic Bikes by Start Locations, Month, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ month)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width = 10, fig.asp = 0.4}
+
+## Visualizing of grouping the data by start location, customer and rideable type mean for docked bikes
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_start_location_month_rideable_and_customer_type_mean %>% 
+      filter(rideable_type == "Docked"),
+    aes(x = start_lng, y = start_lat, z = mean),
+    fun = mean, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Mean duration of bike rides made (in minutes)", 
+                      low = "grey", high = "black") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 60: Mean Duration of Bike Rides Using Docked Bikes by Start Locations, Month, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ month)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_start_location_month_rideable_and_customer_type_mean)
+```
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+## Grouping the data by star location, month, rideable type, and customer type mean
+
+bike_rides_by_end_location_month_rideable_and_customer_type_mean <-
+  aggregated_bike_rides %>% 
+  group_by(end_lng, end_lat, month, rideable_type, member_casual) %>% 
+  summarize(count = sum(count),
+            sum = sum(sum_in_minutes)) %>% 
+  ungroup() %>% 
+  mutate(mean = round(sum/count, 1)) %>% 
+  select(end_lng, end_lat, month, rideable_type, member_casual, mean)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width = 10, fig.asp = 0.4}
+
+## Visualizing of grouping the data by end location, customer and rideable type mean for electric bikes
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_end_location_month_rideable_and_customer_type_mean %>% 
+      filter(rideable_type == "Electric"),
+    aes(x = end_lng, y = end_lat, z = mean),
+    fun = mean, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Mean duration of bike rides made (in minutes)", 
+                      low = "grey", high = "black") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 61: Mean Duration of Bike Rides Using Electric Bikes by End Locations, Month, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ month)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width = 10, fig.asp = 0.4}
+
+## Visualizing of grouping the data by end location, customer and rideable type mean for classic bikes
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_end_location_month_rideable_and_customer_type_mean %>% 
+      filter(rideable_type == "Classic"),
+    aes(x = end_lng, y = end_lat, z = mean),
+    fun = mean, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Mean duration of bike rides made (in minutes)", 
+                      low = "grey", high = "black") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 62: Mean Duration of Bike Rides Using Classic Bikes by End Locations, Month, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ month)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width = 10, fig.asp = 0.4}
+
+## Visualizing of grouping the data by end location, customer and rideable type mean for docked bikes
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_end_location_month_rideable_and_customer_type_mean %>% 
+      filter(rideable_type == "Docked"),
+    aes(x = end_lng, y = end_lat, z = mean),
+    fun = mean, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Mean duration of bike rides made (in minutes)", 
+                      low = "grey", high = "black") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 63: Mean Duration of Bike Rides Using Docked Bikes by End Locations, Month, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 10, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ month)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_end_location_month_rideable_and_customer_type_mean)
+```
+
+### 8. The total number, total duration, and mean duration of bike rides by weekday, rideable type and customer type
+
+#### 1. The total number of bike rides by weekday, rideable type, and customer type
+
+From Figure 64, annual members who drive classic and electric bikes drive more frequently on Tuesdays, followed by Wednesdays and Thursdays, with the least number of bike rides on Sundays and Saturdays. Note that for classic bike annual members, the number of bike rides is the same between Friday and Saturday. In contrast, for casual riders, the highest number of bike rides made is on Saturdays and Sundays for all bike types, followed by Fridays and Mondays, with the least number of bike rides on Wednesdays. Note that docked bike rides are the lowest each weekday, whereas classic bike rides are higher than electric bike rides on Fridays, Saturdays, and Sundays, and on all other weekdays, classic bike rides are about the same as electric bike rides.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Grouping the data by weekday, customer type and rideable type count
+
+bike_rides_by_weekday_rideable_and_customer_types_count <-
+  aggregated_bike_rides %>% 
+  group_by(day_of_week, member_casual, rideable_type) %>% 
+  summarize(count = sum(count)) %>%
+  ungroup()
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by weekday, customer type and rideable type count
+
+bike_rides_by_weekday_rideable_and_customer_types_count %>% 
+  ggplot(aes(x = day_of_week, y = count)) +
+  theme_wsj() +
+  scale_fill_wsj() +
+  geom_line(aes(group = rideable_type, color = rideable_type),
+              position = position_dodge(0), size = 1.5) +
+  labs(title = "Figure 64: Total Number of Bike Rides by Weekday, Rideable Type, and Customer Type",
+       caption = "Data source: Cyclistic, June 2021 - May 2022", 
+       x = "Weekday", 
+       y = "Number of bike rides made") +
+  theme(plot.title = element_text(size = 9, face = "bold")) +
+  theme(plot.caption = element_text(size = 9)) +
+  theme(axis.title.x = element_text(size = 10, face = "italic")) +
+  theme(axis.title.y = element_text(size = 10, face = "italic")) +
+  theme(axis.text.x = element_text(size = 8, 
+                                   vjust = 0.5, hjust = 1,
+                                   angle = 90)) +
+  theme(axis.text.y = element_text(size = 8)) +
+  geom_vline(xintercept = seq(from = 1, to = 7, by = 1), 
+             linetype = "longdash", color = "black", size = 0.2) +
+  scale_color_brewer(palette = "Dark2") +
+  theme(legend.text = element_text(size = 8)) +
+  theme(legend.title = element_text(size = 9)) +
+  guides(color = guide_legend(ncol = 5, byrow = FALSE, 
+                              title = "Rideable Type")) +
+  facet_grid(~ member_casual) +
+  scale_y_continuous(labels = comma)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_weekday_rideable_and_customer_types_count)
+```
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+## Grouping the data by start location, weekday, rideable type, and customer type count
+
+bike_rides_by_start_location_weekday_rideable_and_customer_type_count <-
+  aggregated_bike_rides %>% 
+  group_by(start_lng, start_lat, day_of_week, rideable_type, member_casual) %>% 
+  summarize(count = sum(count)) %>% 
+  ungroup()
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by start location, customer and rideable type count for electric bikes
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_start_location_weekday_rideable_and_customer_type_count %>% 
+      filter(rideable_type == "Electric"),
+    aes(x = start_lng, y = start_lat, z = count/1000),
+    fun = sum, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Total number of bike rides made (in thousands)", 
+                      low = "green", high = "red") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 65: Total Number of Bike Rides Using Electric Bikes by Start Locations, Weekday, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 9, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ day_of_week)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by start location, customer and rideable type count for classic bikes
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_start_location_weekday_rideable_and_customer_type_count %>% 
+      filter(rideable_type == "Classic"),
+    aes(x = start_lng, y = start_lat, z = count/1000),
+    fun = sum, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Total number of bike rides made (in thousands)", 
+                      low = "green", high = "red") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 66: Total Number of Bike Rides Using Classic Bikes by Start Locations, Weekday, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 9, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ day_of_week)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by start location, customer and rideable type count for docked bikes
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_start_location_weekday_rideable_and_customer_type_count %>% 
+      filter(rideable_type == "Docked"),
+    aes(x = start_lng, y = start_lat, z = count/1000),
+    fun = sum, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Total number of bike rides made (in thousands)", 
+                      low = "green", high = "red") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 67: Total Number of Bike Rides Using Docked Bikes by Start Locations, Weekday, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 9, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ day_of_week)
+```
+
+Again, all maps (see Figures 65, 66, 67, 68, 69, and 70) demonstrated the same spatial patterns, with most bike rides starting and ending in the northeastern part of the city each weekday.
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+## Grouping the data by end location, weekday, rideable type, and customer type count
+
+bike_rides_by_end_location_weekday_rideable_and_customer_type_count <-
+  aggregated_bike_rides %>% 
+  group_by(end_lng, end_lat, day_of_week, rideable_type, member_casual) %>% 
+  summarize(count = sum(count)) %>% 
+  ungroup()
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by end location, customer and rideable type count for electric bikes
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_end_location_weekday_rideable_and_customer_type_count %>% 
+      filter(rideable_type == "Electric"),
+    aes(x = end_lng, y = end_lat, z = count/1000),
+    fun = sum, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Total number of bike rides made (in thousands)", 
+                      low = "green", high = "red") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 68: Total Number of Bike Rides Using Electric Bikes by End Locations, Weekday, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 9, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ day_of_week)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by end location, customer and rideable type count for classic bikes
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_end_location_weekday_rideable_and_customer_type_count %>% 
+      filter(rideable_type == "Classic"),
+    aes(x = end_lng, y = end_lat, z = count/1000),
+    fun = sum, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Total number of bike rides made (in thousands)", 
+                      low = "green", high = "red") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 69: Total Number of Bike Rides Using Classic Bikes by End Locations, Weekday, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 9, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ day_of_week)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by end location, customer and rideable type count for docked bikes
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_end_location_weekday_rideable_and_customer_type_count %>% 
+      filter(rideable_type == "Docked"),
+    aes(x = end_lng, y = end_lat, z = count/1000),
+    fun = sum, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Total number of bike rides made (in thousands)", 
+                      low = "green", high = "red") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 70: Total Number of Bike Rides Using Docked Bikes by End Locations, Weekday, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 9, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ day_of_week)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_end_location_weekday_rideable_and_customer_type_count)
+```
+
+#### 2. The total duration of bike rides by weekday, rideable type, and customer type
+
+Figure 71 shows that classic bike annual members have a higher total duration than electric bike annual members throughout all weekdays (more than 50,000 hours vs less than 50,000 hours). In addition, the highest total duration for classic bike annual members is on Saturdays, followed by Tuesdays and Wednesdays, and the least is on Mondays and Fridays. At the same time, for electric bike annual members, the highest total duration is on Tuesdays and Wednesdays, and the least is on Sundays, followed by Mondays, Fridays and Saturdays. In contrast, the total duration for casual riders is the highest for classic bike riders, followed by electric bike riders and docked bike riders throughout all weekdays. For all rideable types, the highest total duration of bike rides is on Saturdays and Sundays, followed by Fridays and Mondays. However, the lowest total duration for classic bike riders is on Tuesday and Wednesday, whereas it is Wednesday for electric and docked bike riders.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Grouping the data by weekday, customer type and rideable type sum
+
+bike_rides_by_weekday_rideable_and_customer_types_sum <-
+  aggregated_bike_rides %>% 
+  group_by(day_of_week, member_casual, rideable_type) %>% 
+  summarize(sum = round(sum(sum_in_minutes)/60, 1)) %>% 
+  ungroup()
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by month, customer type and rideable type sum
+
+bike_rides_by_weekday_rideable_and_customer_types_sum %>% 
+  ggplot(aes(x = day_of_week, y = sum)) +
+  theme_wsj() +
+  scale_fill_wsj() +
+  geom_line(aes(group = rideable_type, color = rideable_type),
+              position = position_dodge(0), size = 1.5) +
+  labs(title = "Figure 71: Total Duration of Bike Rides by Weekday, Rideable Type, and Customer Type",
+       caption = "Data source: Cyclistic, June 2021 - May 2022", 
+       x = "Weekday", 
+       y = "Duration of bike rides made (in hours)") +
+  theme(plot.title = element_text(size = 9, face = "bold")) +
+  theme(plot.caption = element_text(size = 9)) +
+  theme(axis.title.x = element_text(size = 10, face = "italic")) +
+  theme(axis.title.y = element_text(size = 10, face = "italic")) +
+  theme(axis.text.x = element_text(size = 8, 
+                                   vjust = 0.5, hjust = 1,
+                                   angle = 90)) +
+  theme(axis.text.y = element_text(size = 8)) +
+  geom_vline(xintercept = seq(from = 1, to = 12, by = 1), 
+             linetype = "longdash", color = "black", size = 0.2) +
+  scale_color_brewer(palette = "Dark2") +
+  theme(legend.text = element_text(size = 8)) +
+  theme(legend.title = element_text(size = 9)) +
+  guides(color = guide_legend(ncol = 5, byrow = FALSE, 
+                              title = "Rideable Type")) +
+  facet_grid(~ member_casual) +
+  scale_y_continuous(labels = comma)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_weekday_rideable_and_customer_types_sum)
+```
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+## Grouping the data by start location, weekday, rideable type, and customer type sum
+
+bike_rides_by_start_location_weekday_rideable_and_customer_type_sum <-
+  aggregated_bike_rides %>% 
+  group_by(start_lng, start_lat, day_of_week, rideable_type, member_casual) %>% 
+  summarize(sum = round(sum(sum_in_minutes)/60, 1)) %>% 
+  ungroup()
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by start location, customer and rideable type sum for electric bikes
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_start_location_weekday_rideable_and_customer_type_sum %>% 
+      filter(rideable_type == "Classic"),
+    aes(x = start_lng, y = start_lat, z = sum/1000),
+    fun = sum, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Total duration of bike rides made (in thousand hours)", 
+                      low = "green", high = "red") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 72: Total Duration of Bike Rides Using Electric Bikes by Start Locations, Weekday, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 9, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ day_of_week)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by start location, customer and rideable type sum for classic bikes
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_start_location_weekday_rideable_and_customer_type_sum %>% 
+      filter(rideable_type == "Classic"),
+    aes(x = start_lng, y = start_lat, z = sum/1000),
+    fun = sum, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Total duration of bike rides made (in thousand hours)", 
+                      low = "green", high = "red") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 73: Total Duration of Bike Rides Using Classic Bikes by Start Locations, Weekday, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 9, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ day_of_week)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by start location, customer and rideable type sum for docked bikes
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_start_location_weekday_rideable_and_customer_type_sum %>% 
+      filter(rideable_type == "Docked"),
+    aes(x = start_lng, y = start_lat, z = sum/1000),
+    fun = sum, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Total duration of bike rides made (in thousand hours)", 
+                      low = "green", high = "red") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 74: Total Duration of Bike Rides Using Docked Bikes by Start Locations, Weekday, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 9, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ day_of_week)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_start_location_weekday_rideable_and_customer_type_sum)
+```
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+## Grouping the data by end location, weekday, rideable type, and customer type sum
+
+bike_rides_by_end_location_weekday_rideable_and_customer_type_sum <-
+  aggregated_bike_rides %>% 
+  group_by(end_lng, end_lat, day_of_week, rideable_type, member_casual) %>% 
+  summarize(sum = round(sum(sum_in_minutes)/60, 1)) %>% 
+  ungroup()
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by end location, customer and rideable type sum for electric bikes
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_end_location_weekday_rideable_and_customer_type_sum %>% 
+      filter(rideable_type == "Electric"),
+    aes(x = end_lng, y = end_lat, z = sum/1000),
+    fun = sum, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Total duration of bike rides made (in thousand hours)", 
+                      low = "green", high = "red") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 75: Total Duration of Bike Rides Using Electric Bikes by End Locations, Weekday, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 9, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ day_of_week)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by end location, customer and rideable type sum for classic bikes
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_end_location_weekday_rideable_and_customer_type_sum %>% 
+      filter(rideable_type == "Classic"),
+    aes(x = end_lng, y = end_lat, z = sum/1000),
+    fun = sum, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Total duration of bike rides made (in thousand hours)", 
+                      low = "green", high = "red") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 76: Total Duration of Bike Rides Using Classic Bikes by End Locations, Weekday, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 9, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ day_of_week)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by end location, customer and rideable type sum for docked bikes
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_end_location_weekday_rideable_and_customer_type_sum %>% 
+      filter(rideable_type == "Docked"),
+    aes(x = end_lng, y = end_lat, z = sum/1000),
+    fun = sum, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Total duration of bike rides made (in thousand hours)", 
+                      low = "green", high = "red") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 77: Total Duration of Bike Rides Using Docked Bikes by End Locations, Weekday, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 9, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ day_of_week)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_end_location_weekday_rideable_and_customer_type_sum)
+```
+
+#### 3. The mean duration of bike rides by weekday, rideable type, and customer type
+
+Figure 78 shows that classic bike annual members have a slightly higher duration per trip than electric bike annual members throughout the week. On the contrary, for casual riders, docked bike riders have the highest mean duration, followed by classic bike and electric bike riders, throughout the week. The highest mean duration is on Saturdays and Sundays, and the lowest is on Tuesdays, Wednesdays, and Thursdays for classic and electric bike riders for both annual members and casual riders. At the same time, for docked bike riders, the highest mean duration is on Sundays, followed by Mondays, Tuesdays, and Saturdays, and the lowest is on Wednesdays and Fridays, followed by Thursdays.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Grouping the data by weekday, customer type and rideable type mean
+
+bike_rides_by_weekday_rideable_and_customer_types_mean <-
+  aggregated_bike_rides %>% 
+  group_by(day_of_week, member_casual, rideable_type) %>% 
+  summarize(count = sum(count),
+            sum = sum(sum_in_minutes)) %>% 
+  ungroup() %>% 
+  mutate(mean = round(sum/count, 1)) %>% 
+  select(day_of_week, member_casual, rideable_type, mean)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by weekday, customer type and rideable type mean
+
+bike_rides_by_weekday_rideable_and_customer_types_mean %>% 
+  ggplot(aes(x = day_of_week, y = mean)) +
+  theme_wsj() +
+  scale_fill_wsj() +
+  geom_line(aes(group = rideable_type, color = rideable_type),
+              position = position_dodge(0), size = 1.5) +
+  labs(title = "Figure 78: Mean Duration of Bike Rides by Weekday, Rideable Type, and Customer Type",
+       caption = "Data source: Cyclistic, June 2021 - May 2022", 
+       x = "Weekday", 
+       y = "Duration of bike rides made (in minutes)") +
+  theme(plot.title = element_text(size = 9, face = "bold")) +
+  theme(plot.caption = element_text(size = 9)) +
+  theme(axis.title.x = element_text(size = 10, face = "italic")) +
+  theme(axis.title.y = element_text(size = 10, face = "italic")) +
+  theme(axis.text.x = element_text(size = 8, 
+                                   vjust = 0.5, hjust = 1,
+                                   angle = 90)) +
+  theme(axis.text.y = element_text(size = 8)) +
+  geom_vline(xintercept = seq(from = 1, to = 7, by = 1), 
+             linetype = "longdash", color = "black", size = 0.2) +
+  scale_color_brewer(palette = "Dark2") +
+  theme(legend.text = element_text(size = 8)) +
+  theme(legend.title = element_text(size = 9)) +
+  guides(color = guide_legend(ncol = 5, byrow = FALSE, 
+                              title = "Rideable Type")) +
+  facet_grid(~ member_casual) +
+  scale_y_continuous(labels = comma)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_weekday_rideable_and_customer_types_mean)
+```
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+## Grouping the data by start location, weekday, rideable type, and customer type mean
+
+bike_rides_by_start_location_weekday_rideable_and_customer_type_mean <-
+  aggregated_bike_rides %>% 
+  group_by(start_lng, start_lat, day_of_week, rideable_type, member_casual) %>% 
+  summarize(count = sum(count),
+            sum = sum(sum_in_minutes)) %>% 
+  ungroup() %>% 
+  mutate(mean = round(sum/count, 1)) %>% 
+  select(start_lng, start_lat, day_of_week, rideable_type, member_casual, mean)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by start location, customer and rideable type mean for electric bikes
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_start_location_weekday_rideable_and_customer_type_mean %>% 
+      filter(rideable_type == "Electric"),
+    aes(x = start_lng, y = start_lat, z = mean),
+    fun = mean, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Mean duration of bike rides made (in minutes)", 
+                      low = "grey", high = "black") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 79: Mean Duration of Bike Rides Using Electric Bikes by Start Locations, Weekday, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 9, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ day_of_week)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by start location, customer and rideable type mean for classic bikes
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_start_location_weekday_rideable_and_customer_type_mean %>% 
+      filter(rideable_type == "Classic"),
+    aes(x = start_lng, y = start_lat, z = mean),
+    fun = mean, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Mean duration of bike rides made (in minutes)", 
+                      low = "grey", high = "black") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 80: Mean Duration of Bike Rides Using Classic Bikes by Start Locations, Weekday, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 9, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ day_of_week)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by start location, customer and rideable type mean for docked bikes
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_start_location_weekday_rideable_and_customer_type_mean %>% 
+      filter(rideable_type == "Docked"),
+    aes(x = start_lng, y = start_lat, z = mean),
+    fun = mean, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Mean duration of bike rides made (in minutes)", 
+                      low = "grey", high = "black") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 81: Mean Duration of Bike Rides Using Docked Bikes by Start Locations, Weekday, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 9, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ day_of_week)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_start_location_weekday_rideable_and_customer_type_mean)
+```
+
+Again, Figures 79, 80, 81, 82, 83, and 84 do not show spatial patterns except in occasional or random places indicated by black dots.
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+## Grouping the data by end location, weekday, rideable type, and customer type mean
+
+bike_rides_by_end_location_weekday_rideable_and_customer_type_mean <-
+  aggregated_bike_rides %>% 
+  group_by(end_lng, end_lat, day_of_week, rideable_type, member_casual) %>% 
+  summarize(count = sum(count),
+            sum = sum(sum_in_minutes)) %>% 
+  ungroup() %>% 
+  mutate(mean = round(sum/count, 1)) %>% 
+  select(end_lng, end_lat, day_of_week, rideable_type, member_casual, mean)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by end location, customer and rideable type mean for electric bikes
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_end_location_weekday_rideable_and_customer_type_mean %>% 
+      filter(rideable_type == "Electric"),
+    aes(x = end_lng, y = end_lat, z = mean),
+    fun = mean, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Mean duration of bike rides made (in minutes)", 
+                      low = "grey", high = "black") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 82: Mean Duration of Bike Rides Using Electric Bikes by End Locations, Weekday, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 9, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ day_of_week)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by end location, customer and rideable type mean for classic bikes
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_end_location_weekday_rideable_and_customer_type_mean %>% 
+      filter(rideable_type == "Classic"),
+    aes(x = end_lng, y = end_lat, z = mean),
+    fun = mean, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Mean duration of bike rides made (in minutes)", 
+                      low = "grey", high = "black") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 83: Mean Duration of Bike Rides Using Classic Bikes by End Locations, Weekday, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 9, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ day_of_week)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+## Visualizing of grouping the data by end location, customer and rideable type mean for docked bikes
+
+ggmap(chicago_road_map) + 
+  stat_summary_2d(
+    data = bike_rides_by_end_location_weekday_rideable_and_customer_type_mean %>% 
+      filter(rideable_type == "Docked"),
+    aes(x = end_lng, y = end_lat, z = mean),
+    fun = mean, alpha = 0.6, bins = 20) + 
+  scale_fill_gradient(name = "Mean duration of bike rides made (in minutes)", 
+                      low = "grey", high = "black") +
+  labs(x = "Longtitude",
+       y = "Latitude",
+       caption = "Data source: Cyclistic, June 2021 - May 2022",
+       title = "Figure 84: Mean Duration of Bike Rides Using Docked Bikes by End Locations, Weekday, and Customer Type") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(size = 9, face = "bold", hjust = 0.6),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9)) +
+  facet_grid(member_casual ~ day_of_week)
+```
+
+```{r echo = FALSE, message = FALSE}
+
+## Deleting the data that are no longer necessary
+
+rm(bike_rides_by_end_location_weekday_rideable_and_customer_type_mean)
+```
+
+## Conclusion
+
+To summarize, there are many differences between casual riders and annual members. Annual members (or members) are those customers who purchase annual memberships, and casual riders (or casual) buy single-ride or full-day passes. First, annual members tend to have more bike rides per year than casual riders (3.3 vs 2.5 million bike rides). However, they tend to spend less time driving than casual riders (0.7 vs 1 million hours), making their average bike ride roughly two times what casual riders do (12.9 vs 25.7 minutes). Finally, the most significant number of bike rides is made in northeastern Chicago for both customers. Therefore, annual members drive more but for less time.
+
+The tendency of annual members to make more bike rides than casual riders continues each month, except in summer. At the same time, casual riders have a higher total duration between May and October, with annual members having a slightly higher total duration in other months. Regarding the mean duration, casual riders roughly take two or three times more time driving a bike per trip than annual members. The total and mean duration for casual riders peak in summer, which is the same for annual members; however, its peak is less steep and smoother. Both customers have very few bike rides in winter. Therefore, annual members have most of their bike rides in summer, which is valid for annual members, but annual members have a less steep peak.
+
+Next, there is a major difference between casual riders and annual members in terms of a weekly routine. Casual riders tend to have more bike rides on weekend days (i.e., Saturdays and Sundays) and fewer in the middle of the week (i.e., Tuesday, Wednesday, and Thursday). On the contrary, annual members tend to have more bike rides in the middle of the week and fewer on the weekend days. In this case, casual riders have the highest total and mean duration on the weekend days and the lowest in the middle of the week, whereas, for annual members, both total and mean duration of bike rides are about the same each weekday. Therefore, casual riders drive more and for more time on weekend days and less on the middle of weekdays compared to annual members.
+
+Annual members have more bike rides than casual riders, except for night (between 22 and 4 o'clock). Nevertheless, annual members drive for more between 5 and 9 o'clock. All other times casual riders have more lengthy bike rides. Finally, casual riders drive for more per trip than annual members throughout the day. For both customers, the second half of the day is busier than the first. By weekday, both customers peak on weekend days earlier than other weekdays by 1-2 hours (12-17 vs 17-21 o'clock). Therefore, both customers are busy in the second half of the day, with earlier bike rides on weekend days compared to non-weekend days.
+
+Both customers have very similar trends in rideable type. For example, both customers use classic bikes more and drive more than electric ones. However, annual members do not use docked bikes, which casual riders use. All classic and docked bike riders tend to have fewer bike rides in the city's southern part than electric bike riders. Nevertheless, for annual members, both classic and electric bike rides spend roughly the same time per bike trip, whereas, for casual riders, docked bike riders spend roughly two times more per bike ride than classic bike riders (49.5 vs 25.9 minutes) and electric bike riders (49.5 vs 19.2 minutes), with classic bike riders having more lengthy average durations than electric bike riders (25.9 vs 19.2 minutes). Therefore, annual members and casual riders more frequently use and drive classic bikes over electric ones; however, annual members drive, on average, the same time on electric and classic bikes, whereas casual riders drive, on average, more on docked bikes, followed by classic and electric bikes.
+
+Annual members tend to have roughly the same duration per trip each month for electric and classic bike rides. At the same time, casual riders have a higher mean duration for docked bike riders, followed by classic bike riders and electric bike riders. For both customer types who drive classic bikes, the highest number of bike rides and their total duration is the highest in the summer and September, which can also be said about casual electric and docked bike riders. Nevertheless, electric bike annual members have more bike rides; their total duration is in May and October, followed by the summer months. Therefore, electric bike annual members peak in May and October, whereas all other customers do so in the summer and September.
+
+Again, annual members tend to have roughly the same duration per trip each weekday for electric and classic bike rides. At the same time, casual riders have a higher mean duration for docked bike riders, followed by classic bike riders and electric bike riders. Furthermore, for all casual riders, the highest number of bike rides and their total duration is the highest on the weekend days and the lowest in the middle of the week days, whereas, for annual members, it is the middle of the week (i.e., Tuesday, Wednesday, and Thursday) and Saturday (for classic bike annual members). Therefore, annual members peak in the middle of the week, whereas casual riders do so on the weekend days.
